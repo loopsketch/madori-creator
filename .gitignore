@@ -32,3 +32,5 @@ npm-debug.log*
 
 # Docker
 .docker/
+
+app/node_modules

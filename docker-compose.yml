@@ -12,8 +12,7 @@ services:
       - DATABASE_URL=mysql://root:password@db:3306/madori
       - REDIS_URL=redis://redis:6379
     volumes:
-      - ./app/src:/app/src
-      - ./app/package.json:/app/package.json
+      - ./app:/app
     command: sh -c "npm install && npm run dev"
     depends_on:
       - db
@@ -23,7 +22,6 @@ services:
     image: mysql:8.0
     container_name: madori-db
     environment:
-      - MYSQL_ROOT_PASSWORD=password
       - MYSQL_DATABASE=madori
     volumes:
       - mysql_data:/var/lib/mysql
