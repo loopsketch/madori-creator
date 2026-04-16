@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)"
+    ],
+    "additionalDirectories": [
+      "/home/user/works/madori-creator/app",
+      "/home/user/works/madori-creator/src"
+    ]
+  }
+}
