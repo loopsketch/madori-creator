@@ -11,7 +11,12 @@
     "lint": "eslint src/",
     "type-check": "tsc --noEmit"
   },
-  "keywords": ["floor-plan", "ar", "threejs", "pwa"],
+  "keywords": [
+    "floor-plan",
+    "ar",
+    "threejs",
+    "pwa"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -23,6 +28,8 @@
     "vite-plugin-pwa": "^0.20.0"
   },
   "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.35.0",

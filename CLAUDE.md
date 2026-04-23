@@ -52,3 +52,31 @@ GitHub の操作は CLI で行う。
 - ライブラリを導入する際は CVE が発行されるような脆弱性に注意
 - Web やパッケージツールの診断機能でチェックする
 - サプライチェーン攻撃にも配慮し、リリースされたばかりのバージョンは導入しない
+
+## 開発ワークフローの規定
+
+### Issue とブランチ
+
+1. **Issue の作成**: 指示を受けたら、GitHub に issue を作成し、作業内容をまとめる
+2. **ブランチの作成**: issue 番号を使用して以下のようにブランチを切る
+   ```bash
+   git checkout develop
+   git checkout -b feature/issue-{issue 番号}
+   ```
+3. **実装**: feature/issue-{番号} ブランチで実装を行う
+4. **PR 作成**: 実装完了後、develop ブランチに向けた PR を作成
+
+### .gitignore の追加
+
+ブランチ作成時に以下を追加する:
+
+```gitignore
+# 開発中のファイル
+# feature/issue-{番号}/
+```
+
+### 注意点
+
+- ブランチ名は `feature/issue-{issue 番号}` の形式で統一
+- Issue 番号がない場合は `{issue 番号}` をそのまま使用
+- 既存の issue にマージされた場合は新しい issue を作成
