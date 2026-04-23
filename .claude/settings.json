@@ -39,7 +39,12 @@
       "Bash(curl -sk --connect-timeout 3 https://192.168.10.161:8443)",
       "Bash(curl -sk --connect-timeout 3 https://127.0.0.1:8443)",
       "Bash(curl -sk --connect-timeout 3 https://[::1]:8443)",
-      "Bash(curl -sk --connect-timeout 3 https://172.26.21.165:8443)"
+      "Bash(curl -sk --connect-timeout 3 https://172.26.21.165:8443)",
+      "Bash(docker restart *)",
+      "Read(//usr/share/zoneinfo/Asia/**)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ],
     "additionalDirectories": [
       "/home/user/works/madori-creator/app",

@@ -21,3 +21,20 @@ export interface DrawingData {
   timestamp: number
   data: any
 }
+
+// カプチャ・SfM関連型
+
+export interface CaptureResponse {
+  frameId: string
+  timestamp: number
+  status: 'queued' | 'processing' | 'completed'
+}
+
+export interface SfMResult {
+  frameId: string
+  cameraPose: {
+    position: [number, number, number]
+    rotation: [number, number, number]
+  }
+  points2D: Point[]
+}
