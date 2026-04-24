@@ -14,7 +14,9 @@ services:
       - app
 
   app:
-    image: node:20-alpine
+    build:
+      context: ./app
+      dockerfile: dockerfile/Dockerfile
     container_name: madori-app
     working_dir: /app
     environment:
@@ -23,8 +25,8 @@ services:
       - DATABASE_URL=mysql://root:password@db:3306/madori
       - REDIS_URL=redis://redis:6379
     volumes:
-      - ./app:/app
-    command: sh -c 'apk add --no-cache tzdata && ln -sf /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && npm install && npm run dev -- --host'
+      - ../app:/app
+    command: sh -c 'npm install && npm run dev -- --host'
     depends_on:
       - db
       - redis
@@ -44,6 +46,18 @@ services:
     container_name: madori-redis
     ports:
       - "6379:6379"
+
+  test:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: madori-test
+    working_dir: /test
+    volumes:
+      - /test/app:/test/app
+    command: npx vitest run
+    depends_on:
+      - app
 
 volumes:
   mysql_data:

@@ -1,6 +1,7 @@
 import React, { useRef, useCallback, useState } from 'react'
 import { CameraView } from './components'
 import { CanvasDrawing } from './components'
+import { BirdEyeView } from './components/BirdEyeView'
 import { Point } from './types'
 import './index.css'
 
@@ -50,6 +51,9 @@ function App() {
             描画した線：{drawPoints.length} 本
           </p>
         </div>
+
+        {/* 鳥観図表示 */}
+        <BirdEyeView points={drawPoints} />
       </div>
     </div>
   )
