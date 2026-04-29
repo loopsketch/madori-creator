@@ -35,3 +35,38 @@ export interface TaskMetadata {
   imageDir: string
   images: ProcessedImage[]
 }
+
+// ストリーミング撮影セッション (issue #15)
+
+export type SessionStatus = 'active' | 'closed'
+
+export interface MotionSnapshot {
+  // DeviceMotion の重力ベクトル (m/s^2)。詳細は #17 で確定する
+  gravity?: { x: number; y: number; z: number }
+  // 姿勢 (クォータニオン or オイラー角)。詳細は #17 で確定する
+  attitude?: Record<string, number>
+  // フレーム取得時刻 (ms epoch)
+  timestamp?: number
+}
+
+export interface FrameRecord {
+  index: number
+  receivedAt: string
+  image: ProcessedImage
+  motion?: MotionSnapshot
+}
+
+export interface SessionMetrics {
+  pointCount: number
+  wallCount: number
+}
+
+export interface SessionState {
+  sessionId: string
+  status: SessionStatus
+  createdAt: string
+  imageDir: string
+  frames: FrameRecord[]
+  currentSvg: string
+  metrics: SessionMetrics
+}

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { reconstructionRouter } from './reconstruction'
+import { sessionsRouter } from './sessions'
 
 // API ルータ集約
 
@@ -10,3 +11,4 @@ apiRouter.get('/health', (_req, res) => {
 })
 
 apiRouter.use('/reconstruction', reconstructionRouter)
+apiRouter.use('/sessions', sessionsRouter)
