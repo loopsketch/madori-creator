@@ -1,132 +1,179 @@
 # システムアーキテクチャ設計ドキュメント
 
-## システム全体アーキテクチャ
+## システム概要
+
+iPhone を片手に部屋を歩き回りながら、リアルタイムに間取り図を生成する PWA。
+
+撮影中はカメラ映像を 1 フレームずつバックエンドへ送り、サーバ側で姿勢情報・深度推定・点群統合・平面検出を進めながら、レスポンスとして「現時点の間取り図 (SVG)」をフロントへ返却する。フロントは結果が返ってきたら次のフレームを送るレスポンス駆動ループで動く。
+
+スケールは初期値「持ち手 150cm 仮定」で擬似的に与え、運用中に補正していく方針。設定画面による校正 UI は将来検討する。
+
+## 全体構成
 
 ```mermaid
-graph TB
-    subgraph "Frontend Layer"
-        A[スマートフォンカメラ]
-        B[カメラビュー]
-        C[画像キャプチャ]
-        D[WebSocket/HTTP 通信]
-        E[SVG/DXF 表示]
+graph LR
+    subgraph "iPhone (PWA)"
+        A[getUserMedia<br>カメラ映像]
+        B[DeviceMotion<br>重力/姿勢]
+        C[撮影ループ<br>response 駆動]
+        D[間取り図 SVG 表示]
     end
-    
-    subgraph "Data Layer"
-        F[画像アップロード]
-        G[画像ストレージ]
+
+    subgraph "Backend (Node.js)"
+        E[/POST /api/sessions/<br>セッション開始/]
+        F[/POST /api/sessions/:id/frames/<br>フレーム+姿勢受信/]
+        G[単眼深度推定<br>ONNX Runtime]
+        H[点群累積<br>世界座標]
+        I[RANSAC<br>床面検出]
+        J[壁線抽出]
+        K[上面ビュー SVG 生成]
+        L[in-memory<br>セッションストア]
     end
-    
-    subgraph "Backend Processing"
-        H[OpenMVS/COLAP 処理]
-        I[特徴点抽出]
-        J[カメラ軌跡計算]
-        K[点群データ生成]
-        L[Gaussian Splatting 処理]
-        M[床面抽出]
-        N[壁線ベクトル化]
-        O[SVG/DXF 生成]
-    end
-    
-    subgraph "API Layer"
-        P[REST API]
-        Q[WebSocket サーバー]
-    end
-    
-    A --> B
+
+    A --> C
     B --> C
-    C --> D
-    D --> F
+    C -->|frame + motion| F
     F --> G
-    G --> Q
-    Q --> H
+    F --> L
+    G --> H
     H --> I
     I --> J
     J --> K
-    K --> L
-    L --> M
-    M --> N
-    N --> O
-    O --> P
-    D --> P
-    P --> E
+    K -->|SVG| C
+    C --> D
+    C -->|完了したら次フレーム| C
 ```
 
-## フロントエンドの役割
+## 撮影フロー
 
-| 機能 | 実装 |
+```
+[撮影開始ボタン]
+    ↓
+POST /api/sessions          → sessionId を取得
+    ↓
+[撮影ループ]
+    1. getUserMedia から 1 フレームを JPEG で取得
+    2. DeviceMotion から重力・姿勢のスナップショットを取得
+    3. multipart で POST /api/sessions/:id/frames
+    4. レスポンスの SVG を間取り図表示エリアに反映
+    5. 1 へ戻る (固定間隔ではなくレスポンス完了駆動)
+    ↓
+[撮影終了ボタン]
+    ↓
+DELETE /api/sessions/:id    → 最終結果を確定
+```
+
+## バックエンド処理パイプライン
+
+各フレーム到着時に以下を実行する。1 フレームの処理時間目標は 1 秒未満。
+
+| 段階 | 処理 | 実装方針 |
+|------|------|---------|
+| 1. 受信 | フレーム JPEG + DeviceMotion JSON を multipart で受信 | multer (memoryStorage) + Express |
+| 2. 前処理 | EXIF 回転、長辺リサイズ、JPEG 統一 | Sharp (#9 で実装済) |
+| 3. 姿勢抽出 | 重力ベクトルから世界座標系への回転行列を構築 | フロント側で計算結果を渡す or backend で組み立て |
+| 4. 深度推定 | 単眼深度推定モデルで深度マップを生成 | ONNX Runtime + 軽量モデル (Depth Anything 等) |
+| 5. 点群化 | 深度マップとカメラ姿勢から世界座標の点群を生成 | カメラ intrinsics は機種推定 + デフォルト |
+| 6. 累積 | 既存セッションの累積点群に追加 | セッションストア内 |
+| 7. 平面検出 | RANSAC で床面を検出 (法線が重力方向のもの) | 軽量実装 |
+| 8. 壁線抽出 | 床面に直交する平面を検出し、エッジを 2D ポリラインへ | 軽量実装 |
+| 9. SVG 生成 | 累積壁線を上面ビューでレンダリング | テンプレート |
+| 10. レスポンス | SVG + 進捗 (フレーム数、累積点数等) を返却 | JSON で SVG を埋め込み |
+
+## 疑似スケールの扱い
+
+絶対スケールは単眼カメラでは原理的に決まらないため、以下を組み合わせて疑似的に与える。
+
+| 手段 | 内容 | 段階 |
+|------|------|------|
+| 初期値 | 「持ち手の高さ = 150cm」と仮定し、深度推定の正規化に使う | 初期実装 |
+| 重力方向の固定 | DeviceMotion から床法線を確定し、世界座標系を統一 | 初期実装 |
+| ユーザー校正 (将来) | 撮影開始時に「最初の壁の幅」等を入力させて補正 | 設定画面と合わせて後段で実装 |
+
+精度は ±数十 cm 程度を想定。家具配置の参考となる平面図用途であれば実用十分。測量精度は出ない。
+
+## 技術スタック
+
+### フロント
+| 項目 | 技術 |
 |------|------|
-| 映像取得 | `getUserMedia` API |
-| キャプチャ | 数秒おき、または移動距離検知で JPEG 撮影 |
-| 通信 | WebSocket または HTTP/2 で逐次アップロード |
-| 表示 | 生成された SVG/DXF を描画 |
+| フレームワーク | React + Vite + PWA |
+| 描画 | SVG (受信した間取り図を表示)、Three.js は将来検討 |
+| カメラ | getUserMedia (`facingMode: environment`) |
+| 姿勢 | DeviceMotion / DeviceOrientation (iOS 13+ 許可ダイアログ必要) |
+| 通信 | fetch + multipart/form-data、レスポンス駆動ループ |
 
-## サーバー側の役割
-
-| 処理 | 技術 |
+### バックエンド
+| 項目 | 技術 |
 |------|------|
-| 特徴点抽出 | OpenMVS / COLAP |
-| カメラ軌跡計算 | COLAP SfM モジュール |
-| 点群データ生成 | COLAP 最適化結果 |
-| 空間再現 | Gaussian Splatting |
-| 床面抽出 | 点群から Z 一定面を抽出 |
-| 壁線ベクトル化 | RANSAC 直線フィッティング |
-| 出力形式 | SVG, DXF |
+| ランタイム | Node.js + Express + tsx |
+| 画像処理 | Sharp (EXIF 補正、リサイズ、JPEG 統一) |
+| 深度推定 | ONNX Runtime + 軽量単眼深度モデル (候補: Depth Anything V2 small, MiDaS small) |
+| 点群処理 | 自作の軽量実装 (RANSAC、平面検出、エッジ抽出) |
+| セッション | 初期は in-memory、将来 Redis に置き換え |
+| キュー | 不要 (レスポンス駆動のため。ただし 1 セッション内のフレーム並列処理は考慮) |
 
-## データフロー
+### インフラ
+| 項目 | 技術 |
+|------|------|
+| 配信 | nginx (HTTPS 終端、`/` → frontend、`/api/` → backend) |
+| 開発 | Docker Compose で frontend / backend / nginx / redis / mysql を統一起動 |
 
-### 1. キャプチャフロー
+## API 設計 (予定)
 
-```
-カメラ → getUserMedia → 動画ストリーム
-                              ↓
-                         移動検知/タイマー
-                              ↓
-                         JPEG 圧縮
-                              ↓
-                         WebSocket/HTTP
-                              ↓
-                         サーバーアップロード
+### POST /api/sessions
+```json
+リクエスト: 空ボディ or { "options": {...} }
+レスポンス 201: { "sessionId": "<uuid>", "createdAt": "..." }
 ```
 
-### 2. 処理フロー
-
+### POST /api/sessions/:id/frames
 ```
-画像群 → OpenMVS/COLAP → 特徴点抽出
-                          ↓
-                     カメラ軌跡最適化
-                          ↓
-                     3D 点群生成
-                          ↓
-                Gaussian Splatting 処理
-                          ↓
-                     床面平面検出
-                          ↓
-                     壁線抽出・ベクトル化
-                          ↓
-                     SVG/DXF 出力
+Content-Type: multipart/form-data
+フィールド:
+  - frame    : image/jpeg (1 枚)
+  - motion   : application/json
+                 { gravity: [x,y,z], attitude: [...], timestamp: ... }
+
+レスポンス 200:
+  {
+    "sessionId": "...",
+    "frameIndex": 17,
+    "totalFrames": 17,
+    "svg": "<svg>...</svg>",
+    "metrics": { "pointCount": 12345, "wallCount": 6 }
+  }
 ```
 
-## 技術選定理由
+### DELETE /api/sessions/:id
+```
+レスポンス 200: { "sessionId": "...", "totalFrames": N, "finalSvg": "..." }
+```
 
-### フロントエンド
+詳細仕様は #15 で確定する。
 
-- **getUserMedia**: ブラウザ標準 API、クロスプラットフォーム
-- **JPEG 圧縮**: 通信効率と画質のバランス最適
-- **WebSocket**: 低レイテンシでリアルタイムアップロード
+## サブシステム別 issue マッピング
 
-### サーバー
+| 領域 | issue |
+|------|------|
+| 画像受信・検証 | #9 (実装済) |
+| セッション API 設計 | #15 |
+| 単眼深度推定統合 | #16 |
+| DeviceMotion 取り込み + 疑似スケール | #17 |
+| フロント撮影ストリーミング UI | #18 |
+| 床面・壁線抽出 (RANSAC 軽量実装) | #12 |
+| SVG/DXF 出力整備 | #13 |
+| セッションストアの Redis 永続化 | #14 |
 
-- **OpenMVS**: 高精度 3D 再構築、学術的検証済み
-- **COLMAP**: 高速 SfM、オープンソース
-- **Gaussian Splatting**: 少ない画像でも高速処理、リアルタイムレンダリング
+旧 sub-issue (#10 COLMAP / #11 OpenMVS) は real-time 方針への変更により close。将来的に「高精度モード」として再オープンする可能性は残す。
 
-## セキュリティ考慮事項
+## セキュリティ・プライバシー
 
-- 画像データは転送中に TLS で暗号化
-- サーバー側は必要最小限のアクセス権限
-- プライバシーポリシーへの同意フロー
+- 通信は TLS で暗号化 (nginx 8443/SSL)
+- 撮影画像はセッション内 (`/tmp/madori/<sessionId>/`) に一時保存し、セッション終了時に破棄
+- セッション ID は UUID v4 で推測困難
+- カメラ・モーション利用は iOS のユーザー許可フローに従う
 
 ---
 
-*最終更新：2026-04-17*
+最終更新: 2026-04-29

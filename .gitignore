@@ -1,14 +1,13 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
-/yarn.lock
-/package-lock.json
+node_modules/
+yarn.lock
 
-# production
-/dist
-/dev-dist
-/build
+# production / build output
+dist/
+dev-dist/
+build/
 
 # misc
 .DS_Store
@@ -33,7 +32,3 @@ npm-debug.log*
 
 # Docker
 .docker/
-
-app/node_modules
-app/dist
-app/dev-dist
