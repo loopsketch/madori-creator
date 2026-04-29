@@ -1,4 +1,10 @@
-import type { ReconstructionResult } from './types'
+import type {
+  FramePostResult,
+  ReconstructionResult,
+  SessionCloseResult,
+  SessionCreateResult,
+} from './types'
+import type { MotionSnapshot } from './motion'
 
 // API 通信用の最小ラッパ
 
@@ -27,4 +33,32 @@ export async function postReconstruction(images: File[]): Promise<Reconstruction
   }
 
   return (await res.json()) as ReconstructionResult
+}
+
+export async function createSession(): Promise<SessionCreateResult> {
+  const res = await fetch(`${API_BASE}/sessions`, { method: 'POST' })
+  if (!res.ok) throw new Error(`POST /api/sessions failed: ${res.status}`)
+  return (await res.json()) as SessionCreateResult
+}
+
+export async function postFrameToSession(
+  sessionId: string,
+  frame: Blob,
+  motion?: MotionSnapshot
+): Promise<FramePostResult> {
+  const fd = new FormData()
+  fd.append('frame', frame, 'frame.jpg')
+  if (motion) fd.append('motion', JSON.stringify(motion))
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/frames`, {
+    method: 'POST',
+    body: fd,
+  })
+  if (!res.ok) throw new Error(`POST /api/sessions/${sessionId}/frames failed: ${res.status}`)
+  return (await res.json()) as FramePostResult
+}
+
+export async function closeSession(sessionId: string): Promise<SessionCloseResult> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`DELETE /api/sessions/${sessionId} failed: ${res.status}`)
+  return (await res.json()) as SessionCloseResult
 }

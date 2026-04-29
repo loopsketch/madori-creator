@@ -58,6 +58,8 @@ sessionsRouter.get('/:id', (req: Request, res: Response) => {
     totalFrames: state.frames.length,
     currentSvg: state.currentSvg,
     metrics: state.metrics,
+    worldOrientation: state.worldOrientation,
+    scaleHint: state.scaleHint,
   })
 })
 
@@ -120,6 +122,8 @@ sessionsRouter.post(
         totalFrames: updated.frames.length,
         svg: updated.currentSvg,
         metrics: updated.metrics,
+        worldOrientation: updated.worldOrientation,
+        scaleHint: updated.scaleHint,
       })
     } catch (err) {
       if (err instanceof ImageProcessingError) {

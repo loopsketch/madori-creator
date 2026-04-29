@@ -14,3 +14,37 @@ export interface ReconstructionResult {
   exports?: ExportArtifact[]
   message?: string
 }
+
+export type SessionStatus = 'active' | 'closed'
+
+export interface SessionMetrics {
+  pointCount: number
+  wallCount: number
+}
+
+export interface ScaleHint {
+  handHeldHeightM: number
+  gravityMagnitudeRatio?: number
+}
+
+export interface SessionCreateResult {
+  sessionId: string
+  createdAt: string
+  status: SessionStatus
+}
+
+export interface FramePostResult {
+  sessionId: string
+  frameIndex: number
+  totalFrames: number
+  svg: string
+  metrics: SessionMetrics
+  worldOrientation?: number[]
+  scaleHint?: ScaleHint
+}
+
+export interface SessionCloseResult {
+  sessionId: string
+  totalFrames: number
+  finalSvg: string
+}

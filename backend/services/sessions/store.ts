@@ -1,3 +1,4 @@
+import { calibrateFromMotion, HAND_HELD_HEIGHT_M } from '../scale/calibrator'
 import type {
   FrameRecord,
   MotionSnapshot,
@@ -19,6 +20,7 @@ export function createSession(sessionId: string, imageDir: string): SessionState
     frames: [],
     currentSvg: emptySvg(),
     metrics: { pointCount: 0, wallCount: 0 },
+    scaleHint: { handHeldHeightM: HAND_HELD_HEIGHT_M },
   }
   sessions.set(sessionId, state)
   return state
@@ -47,6 +49,17 @@ export function appendFrame(
     motion: input.motion,
   }
   state.frames.push(record)
+
+  // 最初の有効な motion で世界座標系を確定する。以降のフレームでは
+  // 累積 SLAM 等で更新する想定だが、本 issue では初期姿勢の固定までで十分。
+  if (!state.worldOrientation && input.motion?.gravity) {
+    const calib = calibrateFromMotion(input.motion)
+    if (calib.worldOrientation) {
+      state.worldOrientation = calib.worldOrientation
+    }
+    state.scaleHint = calib.scaleHint
+  }
+
   // SVG / metrics の本実装は #12, #13, #16 で。現段階はプレースホルダー。
   state.currentSvg = placeholderSvg(state.frames.length)
   return state

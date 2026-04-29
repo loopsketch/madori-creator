@@ -41,12 +41,26 @@ export interface TaskMetadata {
 export type SessionStatus = 'active' | 'closed'
 
 export interface MotionSnapshot {
-  // DeviceMotion の重力ベクトル (m/s^2)。詳細は #17 で確定する
+  // DeviceMotion の重力ベクトル (m/s^2)
   gravity?: { x: number; y: number; z: number }
-  // 姿勢 (クォータニオン or オイラー角)。詳細は #17 で確定する
-  attitude?: Record<string, number>
+  // DeviceOrientation のオイラー角 (degree)
+  orientation?: { alpha: number; beta: number; gamma: number }
   // フレーム取得時刻 (ms epoch)
   timestamp?: number
+}
+
+// 3x3 回転行列 (列優先表現を採るが、ここでは要素 9 個の配列として扱う)
+export type RotationMatrix3 = [
+  number, number, number,
+  number, number, number,
+  number, number, number,
+]
+
+export interface ScaleHint {
+  // 持ち手の高さ仮定 (m)
+  handHeldHeightM: number
+  // 重力ベクトル長と 9.8 のずれ (デバッグ・有効性判定用)
+  gravityMagnitudeRatio?: number
 }
 
 export interface FrameRecord {
@@ -69,4 +83,8 @@ export interface SessionState {
   frames: FrameRecord[]
   currentSvg: string
   metrics: SessionMetrics
+  // 撮影開始時に確定する世界座標系への回転行列 (camera → world)
+  worldOrientation?: RotationMatrix3
+  // 疑似スケールパラメータ
+  scaleHint?: ScaleHint
 }
