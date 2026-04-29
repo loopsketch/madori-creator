@@ -1,7 +1,6 @@
 import React, { useRef, useCallback, useState } from 'react'
 import { CameraView } from './components'
 import { CanvasDrawing } from './components'
-import { BirdEyeView } from './components/BirdEyeView'
 import { Point } from './types'
 import { closeSession, createSession, getHealth, postFrameToSession } from './lib/client'
 import {
@@ -117,8 +116,8 @@ function App() {
           </div>
         </div>
 
-        {/* 鳥観図表示 */}
-        <BirdEyeView points={drawPoints} />
+        {/* 鳥観図 (BirdEyeView) は #13 の SVG 上面ビュー実装で置き換える予定のため、
+            ここでは非表示にしている。レイアウト被りを避ける目的。 */}
       </div>
     </div>
   )
