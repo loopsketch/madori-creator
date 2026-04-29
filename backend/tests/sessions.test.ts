@@ -45,7 +45,7 @@ describe('sessionsRouter', () => {
   beforeEach(async () => {
     tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'madori-sessions-'))
     app = await startApp(tmpRoot)
-    clearSessionsForTesting()
+    await clearSessionsForTesting()
   })
 
   afterEach(async () => {

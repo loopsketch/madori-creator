@@ -38,7 +38,7 @@ sessionsRouter.post('/', async (_req: Request, res: Response, next: NextFunction
     const sessionId = randomUUID()
     const imageDir = path.join(getTaskDirBase(), sessionId)
     await fs.mkdir(imageDir, { recursive: true })
-    const state = createSession(sessionId, imageDir)
+    const state = await createSession(sessionId, imageDir)
     res.status(201).json({
       sessionId: state.sessionId,
       createdAt: state.createdAt,
@@ -50,8 +50,8 @@ sessionsRouter.post('/', async (_req: Request, res: Response, next: NextFunction
 })
 
 // GET /api/sessions/:id
-sessionsRouter.get('/:id', (req: Request, res: Response) => {
-  const state = getSession(req.params.id)
+sessionsRouter.get('/:id', async (req: Request, res: Response) => {
+  const state = await getSession(req.params.id)
   if (!state) return res.status(404).json({ error: 'SessionNotFound', sessionId: req.params.id })
   res.json({
     sessionId: state.sessionId,
@@ -71,7 +71,7 @@ sessionsRouter.post(
   upload.single('frame'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const state = getSession(req.params.id)
+      const state = await getSession(req.params.id)
       if (!state) {
         return res.status(404).json({ error: 'SessionNotFound', sessionId: req.params.id })
       }
@@ -116,7 +116,7 @@ sessionsRouter.post(
       // 失敗時はモックにフォールバック)
       const depthMap = await estimateDepth(file.buffer)
 
-      const updated = appendFrame(state.sessionId, { image: images[0], motion, depthMap })
+      const updated = await appendFrame(state.sessionId, { image: images[0], motion, depthMap })
       if (!updated) {
         // 直前に閉じられた等のレース。
         return res.status(409).json({ error: 'SessionClosed', sessionId: state.sessionId })
@@ -147,11 +147,11 @@ sessionsRouter.post(
 // DELETE /api/sessions/:id
 sessionsRouter.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const state = getSession(req.params.id)
+    const state = await getSession(req.params.id)
     if (!state) {
       return res.status(404).json({ error: 'SessionNotFound', sessionId: req.params.id })
     }
-    closeSession(state.sessionId)
+    await closeSession(state.sessionId)
     const finalSvg = state.currentSvg
     const finalDxf = renderTopdownDxf(state.floor, state.walls)
     const totalFrames = state.frames.length
@@ -160,7 +160,7 @@ sessionsRouter.delete('/:id', async (req: Request, res: Response, next: NextFunc
     fs.rm(state.imageDir, { recursive: true, force: true }).catch(() => {
       /* ignore */
     })
-    deleteSession(state.sessionId)
+    await deleteSession(state.sessionId)
 
     res.json({
       sessionId: state.sessionId,

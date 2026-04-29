@@ -8,6 +8,8 @@ import {
 import { voxelDownsample } from '../depth/voxel'
 import { detectFloorAndWalls } from '../reconstruction'
 import { renderTopdownSvg } from '../render'
+import { InMemoryRepository } from './memory-repository'
+import type { SessionRepository } from './repository'
 import type {
   DepthMap,
   FrameRecord,
@@ -17,10 +19,8 @@ import type {
   SessionState,
 } from '../../types'
 
-// ストリーミング撮影セッションの in-memory ストア。
-// 永続化と分散対応は #14 で Redis ベースに置き換える。
-
-const sessions = new Map<string, SessionState>()
+// ストリーミング撮影セッションの永続層。
+// SessionRepository の差し替えで in-memory / Redis を切り替えられる。
 
 // 累積点群の上限。これを超えると voxel ダウンサンプル後にもサンプリングで間引く。
 const MAX_POINT_CLOUD_SIZE = 50_000
@@ -28,7 +28,20 @@ const VOXEL_SIZE_M = 0.05
 const POINT_PROJECTION_STRIDE = 2
 const RANSAC_MIN_POINTS = 200
 
-export function createSession(sessionId: string, imageDir: string): SessionState {
+let repository: SessionRepository = new InMemoryRepository()
+
+export function setSessionRepository(repo: SessionRepository): void {
+  repository = repo
+}
+
+export function getSessionRepository(): SessionRepository {
+  return repository
+}
+
+export async function createSession(
+  sessionId: string,
+  imageDir: string
+): Promise<SessionState> {
   const state: SessionState = {
     sessionId,
     status: 'active',
@@ -41,12 +54,11 @@ export function createSession(sessionId: string, imageDir: string): SessionState
     pointCloud: [],
     walls: [],
   }
-  sessions.set(sessionId, state)
-  return state
+  return await repository.create(state)
 }
 
-export function getSession(sessionId: string): SessionState | undefined {
-  return sessions.get(sessionId)
+export async function getSession(sessionId: string): Promise<SessionState | undefined> {
+  return await repository.get(sessionId)
 }
 
 export interface AppendFrameInput {
@@ -55,11 +67,11 @@ export interface AppendFrameInput {
   depthMap?: DepthMap
 }
 
-export function appendFrame(
+export async function appendFrame(
   sessionId: string,
   input: AppendFrameInput
-): SessionState | undefined {
-  const state = sessions.get(sessionId)
+): Promise<SessionState | undefined> {
+  const state = await repository.get(sessionId)
   if (!state || state.status !== 'active') return undefined
 
   const record: FrameRecord = {
@@ -84,6 +96,7 @@ export function appendFrame(
   }
 
   state.currentSvg = renderTopdownSvg(state.floor, state.walls)
+  await repository.update(state)
   return state
 }
 
@@ -119,19 +132,19 @@ function integrateDepth(state: SessionState, depthMap: DepthMap): void {
   }
 }
 
-export function closeSession(sessionId: string): SessionState | undefined {
-  const state = sessions.get(sessionId)
+export async function closeSession(sessionId: string): Promise<SessionState | undefined> {
+  const state = await repository.get(sessionId)
   if (!state) return undefined
   state.status = 'closed'
+  await repository.update(state)
   return state
 }
 
-export function deleteSession(sessionId: string): boolean {
-  return sessions.delete(sessionId)
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  return await repository.delete(sessionId)
 }
 
 // テスト用
-export function clearSessionsForTesting(): void {
-  sessions.clear()
+export async function clearSessionsForTesting(): Promise<void> {
+  await repository.clearAll()
 }
-
