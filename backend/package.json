@@ -17,6 +17,7 @@
   "dependencies": {
     "express": "^4.21.0",
     "multer": "^2.1.1",
+    "onnxruntime-node": "^1.24.3",
     "sharp": "^0.34.5"
   },
   "devDependencies": {

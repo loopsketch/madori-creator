@@ -6,5 +6,7 @@ export default defineConfig({
     globals: true,
     include: ['tests/**/*.test.ts'],
     exclude: ['node_modules', '_legacy/**'],
+    // テスト中は ONNX を介在させない (モデル DL とネイティブ推論を回避)
+    env: { DEPTH_ESTIMATOR: 'mock' },
   },
 })

@@ -15,7 +15,7 @@ import {
   deleteSession,
   getSession,
 } from '../services/sessions/store'
-import { estimateDepthMock } from '../services/depth/estimator.mock'
+import { estimateDepth } from '../services/depth/estimator'
 import { ImageProcessingError, InputValidationError } from '../errors/reconstruction'
 import type { MotionSnapshot } from '../types'
 
@@ -111,9 +111,9 @@ sessionsRouter.post(
         outputDir: path.join(state.imageDir, `frame-${state.frames.length.toString().padStart(4, '0')}`),
       })
 
-      // 深度推定 (現状はモック。#16 第2段で ONNX 実装に差し替える)。
-      // 受信した元のバッファを使う。Sharp 処理後の保存ファイルに切り替えるかは推論モデル次第。
-      const depthMap = await estimateDepthMock(file.buffer)
+      // 深度推定 (DEPTH_ESTIMATOR=onnx の場合 Depth Anything V2 small で推論、
+      // 失敗時はモックにフォールバック)
+      const depthMap = await estimateDepth(file.buffer)
 
       const updated = appendFrame(state.sessionId, { image: images[0], motion, depthMap })
       if (!updated) {
