@@ -1,41 +1,29 @@
-import { Request, Response } from 'express'
-import { ReconstructionRequest, ReconstructionResult } from '../types'
-import { ColmapContainer } from '../docker/colmap'
-import { OpenMVSContainer } from '../docker/openmvs'
-import { ReconstructionService } from '../services/reconstruction'
-import { ExportService } from '../services/export'
+import { Router, type Request, type Response } from 'express'
+import type { ReconstructionRequest, ReconstructionResult } from '../types'
 
-// 3D再構築のAPIエンドポイント
+// 3D 再構築 API のモック実装
+// 実処理は #6-2 以降で段階的に実装する。
 
-export async function reconstruct(req: Request, res: Response) {
-  const { images, options } = req.body as ReconstructionRequest
+export const reconstructionRouter = Router()
 
-  // 1. COLMAPで3D点群を再構築
-  const colmap = new ColmapContainer()
-  await colmap.start()
-  for (const image of images) {
-    await colmap.captureImage(image)
-  }
+reconstructionRouter.post('/', (req: Request, res: Response) => {
+  const body = req.body as Partial<ReconstructionRequest>
+  const imageCount = Array.isArray(body.images) ? body.images.length : 0
 
-  // 2. OpenMVSでメッシュ生成
-  const openmvs = new OpenMVSContainer()
-  await openmvs.start()
-  const points3d = await openmvs.reconstruct()
-
-  // 3. 床面・壁線の抽出
-  const reconstructionService = new ReconstructionService()
-  await reconstructionService.loadPoints3D(points3d)
-  const planes = await reconstructionService.extractFloorPlanes()
-  const walls = await reconstructionService.extractWalls(planes)
-
-  // 4. エクスポート
-  const exportService = new ExportService()
   const result: ReconstructionResult = {
-    points3D: points3d,
-    planes,
-    walls,
-    exportFormats: await exportService.exportSVG(planes, walls)
+    status: 'done',
+    message: `mock: ${imageCount} 枚の画像を受信しました`,
+    exports: [
+      {
+        type: 'svg',
+        content:
+          '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">\n' +
+          '  <rect x="10" y="10" width="80" height="80" fill="none" stroke="#333" stroke-width="2"/>\n' +
+          '</svg>',
+      },
+    ],
   }
 
   res.json(result)
-}
+})

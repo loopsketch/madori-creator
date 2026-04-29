@@ -1,67 +1,24 @@
-// サーバー処理用の型定義
+// API/サービス層で共有する型定義
+// 詳細な 3D 再構築用の型 (Point3D, Plane, Wall 等) は #6-5 以降で再追加する。
 
 export interface ReconstructionRequest {
   images: string[]
-  options: ReconstructionOptions
+  options?: ReconstructionOptions
 }
 
 export interface ReconstructionOptions {
-  colmap: ColmapOptions
-  openmvs: OpenMVSOpts
-  output: OutputFormat
+  // #6-3 以降で COLMAP/OpenMVS 用のオプションを段階的に追加する
 }
 
-export interface ColmapOptions {
-  minMatches: number
-  maxMatches: number
-  reprojectionThreshold: number
-}
-
-export interface OpenMVSOpts {
-  subpixelThreshold: number
-  sigma: number
-  lambda: number
-}
-
-export interface OutputFormat {
-  svg: boolean
-  dxr: boolean
-  floor: boolean
-  walls: boolean
-}
+export type ReconstructionStatus = 'pending' | 'processing' | 'done' | 'failed'
 
 export interface ReconstructionResult {
-  points3D: Point3D[]
-  planes: Plane[]
-  walls: Wall[]
-  exportFormats: ExportFormat[]
+  status: ReconstructionStatus
+  exports: ExportArtifact[]
+  message?: string
 }
 
-export interface Point3D {
-  x: number
-  y: number
-  z: number
-}
-
-export interface Plane {
-  points: Point3D[]
-  normal: Vector3
-  distance: number
-}
-
-export interface Wall {
-  start: Point3D
-  end: Point3D
-  height: number
-}
-
-export interface Vector3 {
-  x: number
-  y: number
-  z: number
-}
-
-export interface ExportFormat {
+export interface ExportArtifact {
   type: 'svg' | 'dxf'
   content: string
 }

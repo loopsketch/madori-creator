@@ -12,8 +12,9 @@
     "isolatedModules": true,
     "outDir": "dist",
     "rootDir": ".",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "types": ["node", "vitest/globals"]
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "exclude": ["node_modules", "dist", "_legacy"]
 }

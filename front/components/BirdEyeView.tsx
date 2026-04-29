@@ -1,8 +1,15 @@
 // 鳥観図表示コンポーネント
 
 import React, { useRef, useEffect } from 'react'
+import type { Point } from '../types'
 
-export function BirdEyeView({ points, height = 200, width = 300 }) {
+interface BirdEyeViewProps {
+  points: Point[]
+  height?: number
+  width?: number
+}
+
+export function BirdEyeView({ points, height = 200, width = 300 }: BirdEyeViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {

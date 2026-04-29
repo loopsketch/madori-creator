@@ -3,15 +3,29 @@ import { CameraView } from './components'
 import { CanvasDrawing } from './components'
 import { BirdEyeView } from './components/BirdEyeView'
 import { Point } from './types'
+import { postReconstruction } from './api/client'
 import './index.css'
 
 // App の簡易実装
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [drawPoints, setDrawPoints] = useState<Point[]>([])
+  const [apiStatus, setApiStatus] = useState<string>('未接続')
 
   const handleDraw = useCallback((points: Point[]) => {
     setDrawPoints(points)
+  }, [])
+
+  const handleApiTest = useCallback(async () => {
+    setApiStatus('送信中...')
+    try {
+      const result = await postReconstruction({ images: [] })
+      console.log('reconstruction result:', result)
+      setApiStatus(`OK: ${result.message ?? result.status}`)
+    } catch (err) {
+      console.error(err)
+      setApiStatus(`NG: ${(err as Error).message}`)
+    }
   }, [])
 
   return (
@@ -50,6 +64,12 @@ function App() {
           <p style={{ marginTop: '0.5rem' }}>
             描画した線：{drawPoints.length} 本
           </p>
+          <div style={{ marginTop: '0.5rem', pointerEvents: 'auto' }}>
+            <button onClick={handleApiTest} style={{ fontSize: '0.85rem' }}>
+              API 疎通テスト
+            </button>
+            <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>{apiStatus}</span>
+          </div>
         </div>
 
         {/* 鳥観図表示 */}
