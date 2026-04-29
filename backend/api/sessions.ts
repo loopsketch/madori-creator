@@ -16,6 +16,7 @@ import {
   getSession,
 } from '../services/sessions/store'
 import { estimateDepth } from '../services/depth/estimator'
+import { renderTopdownDxf } from '../services/render'
 import { ImageProcessingError, InputValidationError } from '../errors/reconstruction'
 import type { MotionSnapshot } from '../types'
 
@@ -152,6 +153,7 @@ sessionsRouter.delete('/:id', async (req: Request, res: Response, next: NextFunc
     }
     closeSession(state.sessionId)
     const finalSvg = state.currentSvg
+    const finalDxf = renderTopdownDxf(state.floor, state.walls)
     const totalFrames = state.frames.length
 
     // セッションディレクトリのクリーンアップ。失敗してもレスポンスには影響させない。
@@ -164,6 +166,7 @@ sessionsRouter.delete('/:id', async (req: Request, res: Response, next: NextFunc
       sessionId: state.sessionId,
       totalFrames,
       finalSvg,
+      finalDxf,
     })
   } catch (err) {
     next(err)

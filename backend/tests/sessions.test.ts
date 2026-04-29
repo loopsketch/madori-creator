@@ -79,11 +79,12 @@ describe('sessionsRouter', () => {
     const r1 = await sendFrame({ timestamp: 1 })
     expect(r1.status).toBe(200)
     expect(r1.body.totalFrames).toBe(1)
-    expect(r1.body.svg).toContain('frames: 1')
+    expect(r1.body.svg).toContain('<svg')
+    expect(r1.body.svg).toContain('class="walls"')
 
     const r2 = await sendFrame()
     expect(r2.body.totalFrames).toBe(2)
-    expect(r2.body.svg).toContain('frames: 2')
+    expect(r2.body.svg).toContain('<svg')
   })
 
   it('GET /api/sessions/:id で現在の状態を取得できる', async () => {
@@ -109,9 +110,11 @@ describe('sessionsRouter', () => {
 
     const res = await fetch(`${app.url}/api/sessions/${sessionId}`, { method: 'DELETE' })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { totalFrames: number; finalSvg: string }
+    const body = (await res.json()) as { totalFrames: number; finalSvg: string; finalDxf: string }
     expect(body.totalFrames).toBe(1)
-    expect(body.finalSvg).toContain('frames: 1')
+    expect(body.finalSvg).toContain('<svg')
+    expect(body.finalDxf).toContain('SECTION')
+    expect(body.finalDxf).toContain('EOF')
 
     const after = await fetch(`${app.url}/api/sessions/${sessionId}`)
     expect(after.status).toBe(404)

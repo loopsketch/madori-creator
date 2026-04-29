@@ -47,4 +47,5 @@ export interface SessionCloseResult {
   sessionId: string
   totalFrames: number
   finalSvg: string
+  finalDxf: string
 }

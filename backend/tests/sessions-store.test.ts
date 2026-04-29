@@ -33,7 +33,7 @@ describe('session store', () => {
     const state = appendFrame('s1', { image: makeImage() })
     expect(state?.frames).toHaveLength(1)
     expect(state?.frames[0].index).toBe(0)
-    expect(state?.currentSvg).toContain('frames: 1')
+    expect(state?.currentSvg).toContain('<svg')
 
     appendFrame('s1', { image: makeImage(), motion: { timestamp: 123 } })
     const after = getSession('s1')

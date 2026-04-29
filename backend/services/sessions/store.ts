@@ -7,6 +7,7 @@ import {
 } from '../depth/pointcloud'
 import { voxelDownsample } from '../depth/voxel'
 import { detectFloorAndWalls } from '../reconstruction'
+import { renderTopdownSvg } from '../render'
 import type {
   DepthMap,
   FrameRecord,
@@ -34,7 +35,7 @@ export function createSession(sessionId: string, imageDir: string): SessionState
     createdAt: new Date().toISOString(),
     imageDir,
     frames: [],
-    currentSvg: emptySvg(),
+    currentSvg: renderTopdownSvg(undefined, []),
     metrics: { pointCount: 0, wallCount: 0 },
     scaleHint: { handHeldHeightM: HAND_HELD_HEIGHT_M },
     pointCloud: [],
@@ -82,8 +83,7 @@ export function appendFrame(
     integrateDepth(state, input.depthMap)
   }
 
-  // SVG の本実装は #13 (上面ビュー) で。現段階はフレーム数とメトリクスのみ。
-  state.currentSvg = placeholderSvg(state.frames.length, state.metrics)
+  state.currentSvg = renderTopdownSvg(state.floor, state.walls)
   return state
 }
 
@@ -135,21 +135,3 @@ export function clearSessionsForTesting(): void {
   sessions.clear()
 }
 
-function emptySvg(): string {
-  return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>'
-}
-
-function placeholderSvg(
-  frameCount: number,
-  metrics: { pointCount: number; wallCount: number }
-): string {
-  // 本実装は #13 (SVG 上面ビュー) で行う。現段階はメトリクスを文字列として並べる。
-  return (
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 80">\n' +
-    '  <rect x="0" y="0" width="220" height="80" fill="#fafafa" stroke="#ccc"/>\n' +
-    `  <text x="110" y="30" text-anchor="middle" font-size="12" fill="#333">frames: ${frameCount}</text>\n` +
-    `  <text x="110" y="50" text-anchor="middle" font-size="12" fill="#333">points: ${metrics.pointCount}, walls: ${metrics.wallCount}</text>\n` +
-    '</svg>'
-  )
-}
