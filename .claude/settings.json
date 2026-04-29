@@ -7,15 +7,8 @@
       "Bash(docker restart *)",
       "Bash(openssl genrsa *)",
       "Bash(openssl req *)",
-      "Bash(curl -s https://api.github.com/repos/madori-creator/issues/6)",
-      "Read(//root/.npm/_logs/**)",
-      "Read(//app/**)",
-      "Bash(docker build *)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:api.github.com)"
     ],
     "additionalDirectories": [
-      "/home/user/.claude/plans"
     ]
   }
 }
