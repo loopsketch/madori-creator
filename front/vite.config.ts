@@ -6,7 +6,15 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: ['0.0.0.0'],
+    // 開発中は LAN IP / localhost / nginx ホスト名で叩かれる可能性があるため許可。
+    allowedHosts: true,
+    hmr: {
+      // nginx (8443/wss) 経由で HMR WebSocket を張る。
+      // nginx 側で /__vite_ws を frontend:3000 へ upgrade する設定と合わせる。
+      path: '/__vite_ws',
+      clientPort: 8443,
+      protocol: 'wss',
+    },
     proxy: {
       '/api': {
         target: 'http://backend:3000',
@@ -38,7 +46,9 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        enabled: true,
+        // dev 環境では SW のキャッシュが旧パスを返して真っ白画面になる事例があるため無効化。
+        // 本番ビルド (vite build) では PWA は通常通り有効。
+        enabled: false,
         type: 'module',
       },
       manifest: {

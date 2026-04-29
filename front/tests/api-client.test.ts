@@ -1,5 +1,5 @@
-import { postReconstruction } from '../api/client'
-import type { ReconstructionResult } from '../api/types'
+import { postReconstruction } from '../lib/client'
+import type { ReconstructionResult } from '../lib/types'
 
 // fetch をモックして API クライアントの最小検証を行う
 

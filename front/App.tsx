@@ -3,7 +3,7 @@ import { CameraView } from './components'
 import { CanvasDrawing } from './components'
 import { BirdEyeView } from './components/BirdEyeView'
 import { Point } from './types'
-import { postReconstruction } from './api/client'
+import { postReconstruction } from './lib/client'
 import './index.css'
 
 // App の簡易実装
