@@ -1,29 +1,44 @@
-import { postReconstruction } from '../lib/client'
-import type { ReconstructionResult } from '../lib/types'
+import { getHealth, postReconstruction } from '../lib/client'
 
 // fetch をモックして API クライアントの最小検証を行う
 
-describe('postReconstruction', () => {
-  it('リクエスト本文を JSON で送信し結果をパースする', async () => {
-    const mockResult: ReconstructionResult = {
-      status: 'done',
-      exports: [{ type: 'svg', content: '<svg/>' }],
-      message: 'mock: 0 枚の画像を受信しました',
-    }
-
-    let receivedBody: string | undefined
-    const fetchMock = async (url: string | URL | Request, init?: RequestInit) => {
-      receivedBody = init?.body as string
-      return new Response(JSON.stringify(mockResult), {
+describe('getHealth', () => {
+  it('GET /api/health を呼び出し JSON をパースする', async () => {
+    let calledUrl: string | undefined
+    const fetchMock = async (url: string | URL | Request) => {
+      calledUrl = String(url)
+      return new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     }
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await postReconstruction({ images: [] })
-    expect(result).toEqual(mockResult)
-    expect(JSON.parse(receivedBody!)).toEqual({ images: [] })
+    const result = await getHealth()
+    expect(result).toEqual({ status: 'ok' })
+    expect(calledUrl).toBe('/api/health')
+
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('postReconstruction', () => {
+  it('FormData として画像を送信する', async () => {
+    let receivedBody: BodyInit | null | undefined
+    const fetchMock = async (_url: string | URL | Request, init?: RequestInit) => {
+      receivedBody = init?.body
+      return new Response(
+        JSON.stringify({ taskId: 'tid', status: 'received', imageCount: 1 }),
+        { status: 202, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'test.jpg', { type: 'image/jpeg' })
+    const result = await postReconstruction([file])
+    expect(result.taskId).toBe('tid')
+    expect(result.status).toBe('received')
+    expect(receivedBody).toBeInstanceOf(FormData)
 
     vi.unstubAllGlobals()
   })

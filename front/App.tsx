@@ -3,7 +3,7 @@ import { CameraView } from './components'
 import { CanvasDrawing } from './components'
 import { BirdEyeView } from './components/BirdEyeView'
 import { Point } from './types'
-import { postReconstruction } from './lib/client'
+import { getHealth } from './lib/client'
 import './index.css'
 
 // App の簡易実装
@@ -19,9 +19,9 @@ function App() {
   const handleApiTest = useCallback(async () => {
     setApiStatus('送信中...')
     try {
-      const result = await postReconstruction({ images: [] })
-      console.log('reconstruction result:', result)
-      setApiStatus(`OK: ${result.message ?? result.status}`)
+      const result = await getHealth()
+      console.log('health:', result)
+      setApiStatus(`OK: ${result.status}`)
     } catch (err) {
       console.error(err)
       setApiStatus(`NG: ${(err as Error).message}`)
