@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 RUN npm install --ignore-scripts
+
 COPY . .
 
 EXPOSE 3000
