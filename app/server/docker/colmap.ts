@@ -27,9 +27,19 @@ export class ColmapContainer {
 
   private execCommand(cmd: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      exec(cmd, (error) => {
-        if (error) reject(error)
-        else resolve()
+      exec(cmd, { stdio: 'pipe' }, (error, stdout, stderr) => {
+        if (error) {
+          const errorDetails = {
+            command: cmd,
+            exitCode: error.code,
+            stderr: stderr?.toString(),
+            timestamp: new Date().toISOString()
+          }
+          console.error('COLMAP 実行失敗:', JSON.stringify(errorDetails))
+          reject(new Error(`COLMAP 実行失敗：${error.message}`))
+        } else {
+          resolve()
+        }
       })
     })
   }
