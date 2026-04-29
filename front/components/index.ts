@@ -1,2 +1,4 @@
 export { CanvasDrawing } from './CanvasDrawing'
 export { CameraView } from './CameraView'
+export type { CameraViewHandle } from './CameraView'
+export { MapView } from './MapView'

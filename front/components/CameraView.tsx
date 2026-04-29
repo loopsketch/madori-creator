@@ -1,313 +1,201 @@
-import { useRef, useEffect, useState } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react'
 
-interface CameraViewProps {
-  className?: string
+// 背面カメラ映像を表示するコンポーネント。
+// 撮影ループ自体は親 (App.tsx) が制御する。CameraView は video 要素を保持し、
+// captureFrameBlob() メソッドで現在のフレームを JPEG Blob として返す。
+
+export interface CameraViewHandle {
+  captureFrameBlob: (quality?: number) => Promise<Blob | null>
+  isReady: () => boolean
 }
 
-export function CameraView({ className = '' }: CameraViewProps) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [ready, setReady] = useState(false)
-  const [isCapturing, setIsCapturing] = useState(false)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-  const [hasMediaDevices, setHasMediaDevices] = useState(
-    typeof navigator.mediaDevices?.getUserMedia !== 'undefined'
-  )
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const isCapturingRef = useRef(isCapturing)
+interface CameraViewProps {
+  isCapturing: boolean
+  onToggleCapture: () => void
+}
 
-  // isCapturing の値を常に最新に
-  useEffect(() => {
-    isCapturingRef.current = isCapturing
-  }, [isCapturing])
+export const CameraView = forwardRef<CameraViewHandle, CameraViewProps>(
+  function CameraView({ isCapturing, onToggleCapture }, ref) {
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const [ready, setReady] = useState(false)
+    const [cameraError, setCameraError] = useState<string | null>(null)
+    const [hasMediaDevices] = useState(
+      typeof navigator !== 'undefined' &&
+        typeof navigator.mediaDevices?.getUserMedia !== 'undefined'
+    )
 
-  // 撮影トグルでループを制御
-  useEffect(() => {
-    if (isCapturing && ready) {
-      startCaptureLoop()
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    }
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [isCapturing, ready])
-
-  // 撮影ボタンクリック時（トグル）
-  const handleManualCapture = () => {
-    if (!ready) return
-    if (isCapturing) {
-      // 撮影停止
-      setIsCapturing(false)
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    } else {
-      // 撮影開始
-      setIsCapturing(true)
-    }
-  }
-
-  // 撮影処理
-  const capture = async () => {
-    try {
+    // ビデオ準備状態の検知
+    useEffect(() => {
       const video = videoRef.current
-      const canvas = canvasRef.current
-      if (!video || !canvas) return
-
-      // canvas のサイズをビデオに合わせる
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-
-      // 画像を描画
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-      // JPEGエンコード
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob(
-          (blob) => resolve(blob!),
-          'image/jpeg',
-          0.9
-        )
-      })
-
-      // バックエンドに送信（SfMに必要な情報だけ）
-      const formData = new FormData()
-      formData.append('image', blob, `capture_${Date.now()}.jpg`)
-
-      const response = await fetch('/api/capture', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`)
+      if (!video) return
+      const checkReady = () => {
+        if (video.readyState >= 2 || (video.videoWidth > 0 && video.videoHeight > 0)) {
+          setReady(true)
+        }
       }
-
-      const result = await response.json()
-      console.log(`Captured: ${result.frameId}`)
-    } catch (err) {
-      console.error('Capture error:', err)
-    }
-  }
-
-  // 自動撮影ループ開始
-  const startCaptureLoop = () => {
-    const intervalMs = 1000 // 1秒ごとにキャプチャ
-    intervalRef.current = setInterval(() => {
-      if (isCapturingRef.current) {
-        capture()
+      video.onloadedmetadata = checkReady
+      video.oncanplay = checkReady
+      return () => {
+        video.onloadedmetadata = null
+        video.oncanplay = null
       }
-    }, intervalMs)
-  }
-  // ビデオ読み込み完了時の準備
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
+    }, [])
 
-    // readystate === 2 で準備就绪（ネットワークデータ読み込み完了）
-    const checkReady = () => {
-      if (video.readyState >= 2 || video.videoWidth > 0 && video.videoHeight > 0) {
-        setReady(true)
+    // カメラストリーム取得
+    useEffect(() => {
+      const video = videoRef.current
+      if (!video || !hasMediaDevices) return
+      let active = true
+      let stream: MediaStream | null = null
+
+      const startCamera = async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+            audio: false,
+          })
+          if (!active) {
+            stream.getTracks().forEach((t) => t.stop())
+            return
+          }
+          video.srcObject = stream
+        } catch (err: unknown) {
+          const message =
+            err instanceof DOMException && err.name === 'NotAllowedError'
+              ? 'カメラのアクセスを許可してください'
+              : err instanceof DOMException && err.name === 'NotFoundError'
+                ? 'カメラが見つかりません'
+                : 'カメラアクセスに失敗しました'
+          setCameraError(message)
+        }
       }
-    }
+      startCamera()
 
-    video.onloadedmetadata = () => checkReady()
-    video.oncanplay = () => checkReady()
-
-    return () => {
-      video.onloadedmetadata = null
-      video.oncanplay = null
-    }
-  }, [])
-
-  // カメラストリームの取得
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video || !hasMediaDevices) return
-
-    const startCamera = async () => {
-      try {
-        const stream = await navigator.mediaDevices!.getUserMedia({
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-          audio: false,
-        })
-        video.srcObject = stream
-      } catch (err: unknown) {
-        const message =
-          err instanceof DOMException && err.name === 'NotAllowedError'
-            ? 'カメラのアクセスを許可してください'
-            : err instanceof DOMException && err.name === 'NotFoundError'
-              ? 'カメラが見つかりません'
-              : 'カメラアクセスに失敗しました'
-        setCameraError(message)
+      return () => {
+        active = false
+        if (stream) stream.getTracks().forEach((t) => t.stop())
       }
-    }
+    }, [hasMediaDevices])
 
-    startCamera()
-
-    return () => {
-      const stream = video.srcObject
-      if (stream instanceof MediaStream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
-    }
-  }, [hasMediaDevices])
-
-  // タイムアウトで準備就绪とする（フォールバック）
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video || !hasMediaDevices) return
-
-    const timer = setTimeout(() => {
-      setReady(true)
-    }, 3000)
-
-    return () => clearTimeout(timer)
-  }, [hasMediaDevices])
-
-  // 再試行ボタン
-  const handleRetry = async () => {
-    setCameraError(null)
-    const video = videoRef.current
-    if (!video || !hasMediaDevices) return
-
-    try {
-      const stream = await navigator.mediaDevices!.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+    useImperativeHandle(
+      ref,
+      () => ({
+        isReady: () => ready,
+        captureFrameBlob: async (quality = 0.85) => {
+          const video = videoRef.current
+          const canvas = canvasRef.current
+          if (!video || !canvas) return null
+          if (video.videoWidth === 0 || video.videoHeight === 0) return null
+          canvas.width = video.videoWidth
+          canvas.height = video.videoHeight
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return null
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          return await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
+          )
         },
-        audio: false,
-      })
-      video.srcObject = stream
-      setReady(true)
-    } catch (err: unknown) {
-      setCameraError('カメラアクセスに失敗しました')
-    }
-  }
+      }),
+      [ready]
+    )
 
-  return (
-    <div className={className}>
-      <video ref={videoRef} autoPlay playsInline muted />
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
+    return (
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* カメラエラー表示 */}
-      {cameraError && (
-        <div
+        {cameraError && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ff6b6b',
+              fontWeight: 'bold',
+              zIndex: 70,
+              padding: '1rem',
+              textAlign: 'center',
+            }}
+          >
+            {cameraError}
+          </div>
+        )}
+
+        {!ready && !cameraError && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              zIndex: 60,
+            }}
+          >
+            読み込み中...
+          </div>
+        )}
+
+        {/* 撮影開始/停止ボタン */}
+        <button
+          onClick={onToggleCapture}
+          disabled={!ready && !isCapturing}
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
+            bottom: '2rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '88px',
+            height: '88px',
+            borderRadius: '50%',
+            border: '4px solid #ffffff',
+            background: isCapturing ? '#ef4444' : 'rgba(255,255,255,0.2)',
+            cursor: ready ? 'pointer' : 'not-allowed',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '1rem',
-            zIndex: 70,
-            padding: '1rem',
-            textAlign: 'center',
+            color: '#fff',
+            fontSize: '0.85rem',
+            fontWeight: 'bold',
+            zIndex: 50,
           }}
+          aria-label={isCapturing ? '撮影停止' : '撮影開始'}
         >
-          <div style={{ color: '#ff6b6b', fontSize: '18px', fontWeight: 'bold' }}>
-            {cameraError}
-          </div>
-          {!hasMediaDevices && (
-            <div style={{ color: '#aaa', fontSize: '14px' }}>
-              このブラウザはカメラに対応していない可能性があります
-              <br />
-              HTTPS環境または対応ブラウザ（Chrome / Safari）をご利用ください
-            </div>
-          )}
-          <button
-            onClick={handleRetry}
+          <div
             style={{
-              background: '#4f46e5',
-              color: '#fff',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '0.5rem',
-              fontSize: '1rem',
-              cursor: 'pointer',
+              width: '32px',
+              height: '32px',
+              borderRadius: isCapturing ? '4px' : '50%',
+              background: isCapturing ? '#fff' : '#ef4444',
+              marginBottom: '4px',
             }}
-          >
-            再試行
-          </button>
-        </div>
-      )}
-
-      {/* 読み込み中表示 */}
-      {(!ready && !isCapturing) && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-          }}
-        >
-          <div style={{ color: 'white', fontSize: '18px' }}>読み込み中...</div>
-        </div>
-      )}
-
-      {/* 撮影ボタン */}
-      <button
-        onClick={handleManualCapture}
-        disabled={!ready && !isCapturing}
-        style={{
-          position: 'absolute',
-          bottom: '2rem',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '80px',
-          height: '80px',
-          borderRadius: '50%',
-          border: 'none',
-          background: isCapturing ? '#ef4444' : '#ffffff',
-          boxShadow: isCapturing ? '0 2px 12px rgba(239,68,68,0.4)' : '0 2px 12px rgba(0,0,0,0.4)',
-          cursor: !ready && !isCapturing ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-        }}
-        aria-label="撮影"
-      >
-        <div
-          style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: isCapturing ? '#ffffff' : '#4f46e5',
-          }}
-        />
-        <div style={{ fontSize: '10px', marginTop: '0.25rem', color: isCapturing ? '#fff' : '#4f46e5' }}>
-          {isCapturing ? '停止' : '撮影'}
-        </div>
-      </button>
-    </div>
-  )
-}
+          />
+          {isCapturing ? '停止' : '開始'}
+        </button>
+      </div>
+    )
+  }
+)
