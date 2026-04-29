@@ -1,7 +1,17 @@
 import { calibrateFromMotion, HAND_HELD_HEIGHT_M } from '../scale/calibrator'
+import { getDefaultIntrinsics } from '../depth/intrinsics'
+import {
+  normalizeDepthByMedian,
+  projectToCamera,
+  transformToWorld,
+} from '../depth/pointcloud'
+import { voxelDownsample } from '../depth/voxel'
+import { detectFloorAndWalls } from '../reconstruction'
 import type {
+  DepthMap,
   FrameRecord,
   MotionSnapshot,
+  Point3D,
   ProcessedImage,
   SessionState,
 } from '../../types'
@@ -10,6 +20,12 @@ import type {
 // 永続化と分散対応は #14 で Redis ベースに置き換える。
 
 const sessions = new Map<string, SessionState>()
+
+// 累積点群の上限。これを超えると voxel ダウンサンプル後にもサンプリングで間引く。
+const MAX_POINT_CLOUD_SIZE = 50_000
+const VOXEL_SIZE_M = 0.05
+const POINT_PROJECTION_STRIDE = 2
+const RANSAC_MIN_POINTS = 200
 
 export function createSession(sessionId: string, imageDir: string): SessionState {
   const state: SessionState = {
@@ -21,6 +37,8 @@ export function createSession(sessionId: string, imageDir: string): SessionState
     currentSvg: emptySvg(),
     metrics: { pointCount: 0, wallCount: 0 },
     scaleHint: { handHeldHeightM: HAND_HELD_HEIGHT_M },
+    pointCloud: [],
+    walls: [],
   }
   sessions.set(sessionId, state)
   return state
@@ -33,6 +51,7 @@ export function getSession(sessionId: string): SessionState | undefined {
 export interface AppendFrameInput {
   image: ProcessedImage
   motion?: MotionSnapshot
+  depthMap?: DepthMap
 }
 
 export function appendFrame(
@@ -50,8 +69,7 @@ export function appendFrame(
   }
   state.frames.push(record)
 
-  // 最初の有効な motion で世界座標系を確定する。以降のフレームでは
-  // 累積 SLAM 等で更新する想定だが、本 issue では初期姿勢の固定までで十分。
+  // 最初の有効な motion で世界座標系を確定する。
   if (!state.worldOrientation && input.motion?.gravity) {
     const calib = calibrateFromMotion(input.motion)
     if (calib.worldOrientation) {
@@ -60,9 +78,45 @@ export function appendFrame(
     state.scaleHint = calib.scaleHint
   }
 
-  // SVG / metrics の本実装は #12, #13, #16 で。現段階はプレースホルダー。
-  state.currentSvg = placeholderSvg(state.frames.length)
+  if (input.depthMap) {
+    integrateDepth(state, input.depthMap)
+  }
+
+  // SVG の本実装は #13 (上面ビュー) で。現段階はフレーム数とメトリクスのみ。
+  state.currentSvg = placeholderSvg(state.frames.length, state.metrics)
   return state
+}
+
+function integrateDepth(state: SessionState, depthMap: DepthMap): void {
+  const handHeight = state.scaleHint?.handHeldHeightM ?? HAND_HELD_HEIGHT_M
+  // 相対深度 → 絶対深度 (中央値が持ち手高さに対応すると仮定)
+  const normalized = normalizeDepthByMedian(depthMap, handHeight)
+  const intrinsics = getDefaultIntrinsics(normalized.width, normalized.height)
+  const camPoints = projectToCamera(normalized, intrinsics, { stride: POINT_PROJECTION_STRIDE })
+  const worldPoints = transformToWorld(camPoints, state.worldOrientation)
+
+  const merged: Point3D[] = state.pointCloud.length === 0
+    ? worldPoints
+    : state.pointCloud.concat(worldPoints)
+  state.pointCloud = voxelDownsample(merged, {
+    voxelSizeM: VOXEL_SIZE_M,
+    maxPoints: MAX_POINT_CLOUD_SIZE,
+  })
+
+  if (state.pointCloud.length >= RANSAC_MIN_POINTS) {
+    const detection = detectFloorAndWalls(state.pointCloud)
+    state.floor = detection.floor
+    state.walls = detection.walls
+    state.metrics = {
+      pointCount: state.pointCloud.length,
+      wallCount: detection.walls.length,
+    }
+  } else {
+    state.metrics = {
+      pointCount: state.pointCloud.length,
+      wallCount: state.walls.length,
+    }
+  }
 }
 
 export function closeSession(sessionId: string): SessionState | undefined {
@@ -85,13 +139,17 @@ function emptySvg(): string {
   return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>'
 }
 
-function placeholderSvg(frameCount: number): string {
-  // 本実装は #13 (SVG/DXF 出力整備) で行う。現段階はフレーム数のみ表示。
+function placeholderSvg(
+  frameCount: number,
+  metrics: { pointCount: number; wallCount: number }
+): string {
+  // 本実装は #13 (SVG 上面ビュー) で行う。現段階はメトリクスを文字列として並べる。
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">\n' +
-    '  <rect x="0" y="0" width="200" height="100" fill="#fafafa" stroke="#ccc"/>\n' +
-    `  <text x="100" y="55" text-anchor="middle" font-size="14" fill="#333">frames: ${frameCount}</text>\n` +
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 80">\n' +
+    '  <rect x="0" y="0" width="220" height="80" fill="#fafafa" stroke="#ccc"/>\n' +
+    `  <text x="110" y="30" text-anchor="middle" font-size="12" fill="#333">frames: ${frameCount}</text>\n` +
+    `  <text x="110" y="50" text-anchor="middle" font-size="12" fill="#333">points: ${metrics.pointCount}, walls: ${metrics.wallCount}</text>\n` +
     '</svg>'
   )
 }

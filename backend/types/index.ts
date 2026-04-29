@@ -1,5 +1,10 @@
 // API/サービス層で共有する型定義
-// 詳細な 3D 再構築用の型 (Point3D, Plane, Wall 等) は #12 以降で再追加する。
+//
+// 3D 再構築用の型 (Point3D, Floor, Wall) は services/reconstruction/types.ts に
+// 実装の詳細とともにあるが、ここから再 export して周辺コードからの参照を容易にする。
+
+import type { Floor, Point3D, Wall } from '../services/reconstruction/types'
+export type { Floor, Plane, Point3D, Vec3, Wall } from '../services/reconstruction/types'
 
 export type ReconstructionStatus = 'received' | 'processing' | 'done' | 'failed'
 
@@ -87,4 +92,28 @@ export interface SessionState {
   worldOrientation?: RotationMatrix3
   // 疑似スケールパラメータ
   scaleHint?: ScaleHint
+  // 累積点群 (世界座標、voxel ダウンサンプル済み)
+  pointCloud: Point3D[]
+  // 直近の RANSAC 結果
+  floor?: Floor
+  walls: Wall[]
+}
+
+// 深度推定 (#16)
+
+export interface DepthMap {
+  width: number
+  height: number
+  // 行優先 (row-major) の深度値配列。長さは width * height。
+  // 単位は m を想定するが、生の出力は相対値 (0〜1) のことが多い。
+  data: Float32Array
+}
+
+export interface CameraIntrinsics {
+  fx: number
+  fy: number
+  cx: number
+  cy: number
+  width: number
+  height: number
 }
