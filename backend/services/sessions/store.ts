@@ -6,7 +6,8 @@ import {
 } from '../scale/calibrator'
 import { getDefaultIntrinsics } from '../depth/intrinsics'
 import {
-  normalizeDepthByMedian,
+  applyDepthScale,
+  calculateMedianDepthScale,
   projectToCamera,
   transformToWorld,
 } from '../depth/pointcloud'
@@ -120,11 +121,13 @@ export async function appendFrame(
       state.baseAlphaDeg = input.motion.orientation?.alpha
       state.baseAlvaPose = input.motion.cameraPose.slice()
       state.scaleHint = calib.scaleHint
-      // 同期前に DeviceMotion ベースで投影された点群はリセットする
+      // 同期前に DeviceMotion ベースで投影された点群はリセットする。
+      // depthScale も再確定させる (基準フレームが変わるため)。
       state.pointCloud = []
       state.walls = []
       state.wallTracker = createWallTrackerState()
       state.floor = undefined
+      state.depthScale = undefined
     }
   }
 
@@ -143,8 +146,13 @@ function integrateDepth(
   motion?: MotionSnapshot
 ): void {
   const handHeight = state.scaleHint?.handHeldHeightM ?? HAND_HELD_HEIGHT_M
-  // 相対深度 → 絶対深度 (中央値が持ち手高さに対応すると仮定)
-  const normalized = normalizeDepthByMedian(depthMap, handHeight)
+  // 相対深度 → 絶対深度。スケールは初回フレームで決め、以降は固定する
+  // (毎フレーム再計算すると同じ壁が違う距離に投影され、AlvaAR pose 採用しても
+  //  点群が世界座標で整合しなくなる)。
+  if (state.depthScale === undefined) {
+    state.depthScale = calculateMedianDepthScale(depthMap, handHeight)
+  }
+  const normalized = applyDepthScale(depthMap, state.depthScale)
   const intrinsics = getDefaultIntrinsics(normalized.width, normalized.height)
   const camPoints = projectToCamera(normalized, intrinsics, { stride: POINT_PROJECTION_STRIDE })
 

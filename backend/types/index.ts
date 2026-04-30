@@ -102,6 +102,9 @@ export interface SessionState {
   // 撮影開始時の AlvaAR pose (4x4 列優先、issue #26)。これと worldOrientation の対応を
   // 使い、各フレームの cameraPose を madori 世界座標系の camera→world 行列に変換する。
   baseAlvaPose?: number[]
+  // 撮影セッション内で固定する深度スケール (issue #26)。初回フレームで中央値から
+  // 算出して以降は使い回し、各フレームの点群を同じ絶対距離スケールで世界座標化する。
+  depthScale?: number
   // 疑似スケールパラメータ
   scaleHint?: ScaleHint
   // 累積点群 (世界座標、voxel ダウンサンプル済み)

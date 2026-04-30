@@ -75,11 +75,26 @@ export function normalizeDepthByMedian(
   depthMap: DepthMap,
   targetCenterDepthM: number
 ): DepthMap {
-  if (depthMap.data.length === 0) return depthMap
-  const median = quickMedian(depthMap.data)
-  if (median <= 0 || !Number.isFinite(median)) return depthMap
+  const scale = calculateMedianDepthScale(depthMap, targetCenterDepthM)
+  return applyDepthScale(depthMap, scale)
+}
 
-  const scale = targetCenterDepthM / median
+// 深度マップの中央値から「持ち手高さ」に揃えるためのスケール係数を返す。
+// 1 撮影セッションで初回フレームに対して計算し、以降は同じ係数を使い回す
+// (毎フレーム再計算すると深度の絶対値がブレて、世界座標系で点群が重ならない)。
+export function calculateMedianDepthScale(
+  depthMap: DepthMap,
+  targetCenterDepthM: number
+): number {
+  if (depthMap.data.length === 0) return 1
+  const median = quickMedian(depthMap.data)
+  if (median <= 0 || !Number.isFinite(median)) return 1
+  return targetCenterDepthM / median
+}
+
+// 既知のスケール係数で深度マップを一様スケールする。
+export function applyDepthScale(depthMap: DepthMap, scale: number): DepthMap {
+  if (!Number.isFinite(scale) || scale === 1) return depthMap
   const data = new Float32Array(depthMap.data.length)
   for (let i = 0; i < data.length; i++) data[i] = depthMap.data[i] * scale
   return { width: depthMap.width, height: depthMap.height, data }
