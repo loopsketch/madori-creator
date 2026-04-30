@@ -20,6 +20,19 @@ function translate4(tx: number, ty: number, tz: number): number[] {
   return m
 }
 
+// 4x4 列優先で +Z 軸周りに angleRad 回転する rigid を作る。
+function rotZ4(angleRad: number): number[] {
+  const c = Math.cos(angleRad)
+  const s = Math.sin(angleRad)
+  // 列優先: col k = R × e_k
+  return [
+    c, s, 0, 0,    // col 0 = (c, s, 0)
+    -s, c, 0, 0,   // col 1 = (-s, c, 0)
+    0, 0, 1, 0,    // col 2 = (0, 0, 1)
+    0, 0, 0, 1,
+  ]
+}
+
 // 回転行列に対して v_camera を掛けた結果を返す
 function applyMatrix(R: number[], v: { x: number; y: number; z: number }) {
   return {
@@ -238,6 +251,57 @@ describe('transformAlvaPose', () => {
       const row = [r.rotation[i * 3], r.rotation[i * 3 + 1], r.rotation[i * 3 + 2]]
       const len = Math.sqrt(row[0] ** 2 + row[1] ** 2 + row[2] ** 2)
       expect(len).toBeCloseTo(1, 5)
+    }
+  })
+
+  it('+Z 軸周りに 90 度回転した currentPose は世界座標で正しく rotZ(90) として現れる', () => {
+    // 重力 (0, 0, -9.80665) なら baseOrientation は identity になる
+    const baseI = calibrateFromMotion({
+      gravity: { x: 0, y: 0, z: -9.80665 },
+    }).worldOrientation as RotationMatrix3
+    const cur = rotZ4(Math.PI / 2)
+    const r = transformAlvaPose(cur, identity4(), baseI)!
+    // 期待: rotation = rotZ(90) (row-major)
+    // = [[0, -1, 0], [1, 0, 0], [0, 0, 1]]
+    const expected = [0, -1, 0, 1, 0, 0, 0, 0, 1]
+    for (let i = 0; i < 9; i++) {
+      expect(r.rotation[i]).toBeCloseTo(expected[i], 6)
+    }
+  })
+
+  it('basePose に rotation がある場合、相対 pose だけが反映される', () => {
+    const baseI = calibrateFromMotion({
+      gravity: { x: 0, y: 0, z: -9.80665 },
+    }).worldOrientation as RotationMatrix3
+    // base: +Z 軸 90 度、cur: +Z 軸 180 度 → 相対 +Z 軸 90 度
+    const base = rotZ4(Math.PI / 2)
+    const cur = rotZ4(Math.PI)
+    const r = transformAlvaPose(cur, base, baseI)!
+    // 期待: rotation = rotZ(90) (旧バグの転置版なら rotZ(-90) になり検出できる)
+    const expected = [0, -1, 0, 1, 0, 0, 0, 0, 1]
+    for (let i = 0; i < 9; i++) {
+      expect(r.rotation[i]).toBeCloseTo(expected[i], 5)
+    }
+  })
+
+  it('basePose の rotation+translation が逆変換される', () => {
+    const baseI = calibrateFromMotion({
+      gravity: { x: 0, y: 0, z: -9.80665 },
+    }).worldOrientation as RotationMatrix3
+    // base に rotation + translation。cur は base と同じ → 相対は identity
+    const base = rotZ4(Math.PI / 2)
+    base[12] = 3
+    base[13] = -1
+    base[14] = 2
+    const cur = base.slice()
+    const r = transformAlvaPose(cur, base, baseI)!
+    expect(r.translation.x).toBeCloseTo(0, 5)
+    expect(r.translation.y).toBeCloseTo(0, 5)
+    expect(r.translation.z).toBeCloseTo(0, 5)
+    // rotation も identity
+    const expected = [1, 0, 0, 0, 1, 0, 0, 0, 1]
+    for (let i = 0; i < 9; i++) {
+      expect(r.rotation[i]).toBeCloseTo(expected[i], 5)
     }
   })
 })

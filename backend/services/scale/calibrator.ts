@@ -194,11 +194,7 @@ export function transformAlvaPose(
   if (!baseInv) return undefined
   const rel = multiplyMat4(baseInv, currentPose)
 
-  const relRot: RotationMatrix3 = [
-    rel[0], rel[1], rel[2],
-    rel[4], rel[5], rel[6],
-    rel[8], rel[9], rel[10],
-  ]
+  const relRot = extractRowMajor3FromCol4(rel)
   const relT: Vec3 = { x: rel[12], y: rel[13], z: rel[14] }
 
   return {
@@ -207,32 +203,43 @@ export function transformAlvaPose(
   }
 }
 
-// 4x4 列優先で rigid (回転 + 並進のみ) を仮定した逆変換。
-function invertRigidMat4(m: number[]): number[] | undefined {
-  // rigid なので回転は転置で逆。並進は -R^T t。
-  const r = [
-    m[0], m[1], m[2],
-    m[4], m[5], m[6],
-    m[8], m[9], m[10],
+// 列優先 4x4 行列の左上 3x3 (rotation 部分) を row-major 3x3 として取り出す。
+// 列優先での要素位置 m[col*4 + row] と row-major での位置 R[row*3 + col] の関係に注意。
+function extractRowMajor3FromCol4(m: number[]): RotationMatrix3 {
+  return [
+    m[0], m[4], m[8],   // R[0][0..2] = m[col=0..2, row=0]
+    m[1], m[5], m[9],   // R[1][0..2] = m[col=0..2, row=1]
+    m[2], m[6], m[10],  // R[2][0..2] = m[col=0..2, row=2]
   ]
-  const t = { x: m[12], y: m[13], z: m[14] }
-  // 転置回転 (= 逆回転)
-  const rT = [
+}
+
+// row-major 3x3 行列の転置 (= 直交行列の場合は逆行列)
+function transposeRowMajor3(r: RotationMatrix3): RotationMatrix3 {
+  return [
     r[0], r[3], r[6],
     r[1], r[4], r[7],
     r[2], r[5], r[8],
   ]
-  const tInv = {
-    x: -(rT[0] * t.x + rT[1] * t.y + rT[2] * t.z),
-    y: -(rT[3] * t.x + rT[4] * t.y + rT[5] * t.z),
-    z: -(rT[6] * t.x + rT[7] * t.y + rT[8] * t.z),
-  }
+}
+
+// row-major 3x3 (rotation) と vec3 (translation) を列優先 4x4 として結合する。
+function combineToCol4(r: RotationMatrix3, t: Vec3): number[] {
   return [
-    rT[0], rT[1], rT[2], 0,
-    rT[3], rT[4], rT[5], 0,
-    rT[6], rT[7], rT[8], 0,
-    tInv.x, tInv.y, tInv.z, 1,
+    r[0], r[3], r[6], 0,  // col 0: row-major で col 0 の値 = r[0,3,6]
+    r[1], r[4], r[7], 0,
+    r[2], r[5], r[8], 0,
+    t.x,  t.y,  t.z,  1,
   ]
+}
+
+// 列優先 4x4 で rigid (rotation + translation) を仮定した逆変換。
+// M = [R t; 0 1] のとき M^-1 = [R^T  -R^T t; 0 1]。
+function invertRigidMat4(m: number[]): number[] | undefined {
+  const R = extractRowMajor3FromCol4(m)
+  const t = { x: m[12], y: m[13], z: m[14] }
+  const RT = transposeRowMajor3(R)
+  const RTt = applyRotMat3(RT, t)
+  return combineToCol4(RT, { x: -RTt.x, y: -RTt.y, z: -RTt.z })
 }
 
 // 4x4 列優先行列の積 (a × b)。
