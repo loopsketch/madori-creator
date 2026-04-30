@@ -36,6 +36,8 @@ function App() {
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [statusMessage, setStatusMessage] = useState<string>('待機中')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [alvaStatus, setAlvaStatus] = useState<string>('-')
+  const [posePos, setPosePos] = useState<string>('-')
 
   const handleDraw = useCallback((points: Point[]) => {
     setDrawPoints(points)
@@ -60,6 +62,14 @@ function App() {
         const result = alvaar.findPose(imageData)
         motion.poseTracking = result.status
         if (result.pose) motion.cameraPose = result.pose
+        setAlvaStatus(result.status)
+        if (result.pose) {
+          setPosePos(
+            `${result.pose[12].toFixed(2)},${result.pose[13].toFixed(2)},${result.pose[14].toFixed(2)}`
+          )
+        }
+      } else {
+        setAlvaStatus(alvaar.isInitialized() ? 'no-image' : 'unavailable')
       }
       const t0 = performance.now()
       try {
@@ -188,6 +198,9 @@ function App() {
           </p>
           <p style={{ margin: '0.25rem 0', fontSize: '0.7rem', color: '#aaa' }}>
             描画線: {drawPoints.length} 本
+          </p>
+          <p style={{ margin: '0.25rem 0', fontSize: '0.7rem', color: '#9cf' }}>
+            AlvaAR: {alvaStatus} / t: {posePos}
           </p>
           {errorMessage && (
             <p style={{ margin: '0.25rem 0', fontSize: '0.75rem', color: '#ff8888' }}>
