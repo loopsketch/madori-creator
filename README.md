@@ -77,3 +77,11 @@ iPhone Safari (推奨) または Android Chrome で実機テストする手順�
 - アーキテクチャ詳細: [`docs/architecture.md`](docs/architecture.md)
 - 開発環境ガイド: [`docs/development.md`](docs/development.md)
 - フォルダ構成: [`docs/structure.md`](docs/structure.md)
+
+## ライセンス
+
+本リポジトリは GNU General Public License v3.0 (またはそれ以降のバージョン) で配布されます。詳細は [`LICENSE`](LICENSE) を参照してください。
+
+### サードパーティ
+
+- **AlvaAR** (GPL-3.0): カメラ位置追跡 (issue #26) のため `front/public/poc/lib/alva_ar.js` に同梱。著作権表示は AlvaAR リポジトリ ([alanross/AlvaAR](https://github.com/alanross/AlvaAR)) を参照。

@@ -78,10 +78,9 @@ let totalDistance = 0
 let fpsSamples = []
 
 async function loadAlvaAR() {
-  // GitHub Pages 配信のモジュール本体を直接読む (PoC のみ。本統合時は同梱予定)。
-  // AlvaAR は内部で WASM を import.meta.url 起点で読み込むため、この URL から
-  // 解決される assets/ 配下に WASM が同梱されている前提。
-  const url = 'https://alanross.github.io/AlvaAR/examples/public/assets/alva_ar.js'
+  // 自リポジトリに同梱した AlvaAR モジュール (WASM は JS 内 embed)。
+  // 本ファイルは GPL-3.0。詳細はリポジトリ root の LICENSE を参照。
+  const url = './lib/alva_ar.js'
   log(`AlvaAR 読み込み: ${url}`)
   const mod = await import(/* @vite-ignore */ url)
   if (!mod.AlvaAR) throw new Error('AlvaAR モジュールに AlvaAR エクスポートが見当たらない')
