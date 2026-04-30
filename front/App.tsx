@@ -210,7 +210,7 @@ function App() {
             描画線: {drawPoints.length} 本
           </p>
           <p style={{ margin: '0.25rem 0', fontSize: '0.7rem', color: '#9cf' }}>
-            AlvaAR: {alvaStatus} / t: {posePos}
+            AlvaAR{alvaar.isUsingImu() ? '+IMU' : ''}: {alvaStatus} / t: {posePos}
           </p>
           {errorMessage && (
             <p style={{ margin: '0.25rem 0', fontSize: '0.75rem', color: '#ff8888' }}>

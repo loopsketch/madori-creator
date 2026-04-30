@@ -6,9 +6,17 @@
 // 公式 Three.js コネクタ (alva_ar_three.js) では Three.js (OpenGL 系: +Y 上 / +Z 後ろ)
 // へ渡す際に Y/Z 方向の translation 反転と quaternion.x 反転を行っている。
 
+import { AlvaIMU, type Quat, type MotionSample } from './alva-imu'
+
 interface AlvaARInstance {
   findCameraPose: (imageData: ImageData) => Float32Array | null
+  findCameraPoseWithIMU?: (
+    imageData: ImageData,
+    orientation: Quat,
+    motion: MotionSample[]
+  ) => Float32Array | null
   getFramePoints?: () => Array<{ x: number; y: number }>
+  reset?: () => void
 }
 
 interface AlvaARConstructor {
@@ -21,6 +29,7 @@ let lastPose: number[] | null = null
 let lastStatus: PoseTracking = 'unavailable'
 let lastImageData: ImageData | null = null
 let lastFramePoints: Array<{ x: number; y: number }> = []
+let imu: AlvaIMU | null = null
 
 export type PoseTracking = 'tracking' | 'lost' | 'unavailable'
 
@@ -75,11 +84,20 @@ export function findPose(imageData: ImageData): PoseResult {
 // (~1Hz) では間隔が空きすぎて頻繁に tracking lost する。本関数で
 // 独立した高頻度ループを起動し、毎回 latest pose を更新する。
 // backend 送信側は getLatestPose() で最新値を読むだけ。
+//
+// 視点が大きく変わったときの SLAM の不安定さを抑えるため、AlvaAR が
+// IMU 連携の findCameraPoseWithIMU を露出している場合はこちらを優先。
+// IMU は DeviceMotion + DeviceOrientation を内部で取得・整形して渡す。
 export function startContinuousTracking(
   provide: ImageDataProvider,
   intervalMs = 33
 ): void {
   if (trackingHandle !== null) return
+  if (!imu) {
+    imu = new AlvaIMU()
+    imu.start()
+  }
+  const useImu = !!instance?.findCameraPoseWithIMU
   const tick = () => {
     if (!instance) {
       trackingHandle = null
@@ -89,7 +107,13 @@ export function startContinuousTracking(
     if (data) {
       lastImageData = data
       try {
-        const raw = instance.findCameraPose(data)
+        let raw: Float32Array | null = null
+        if (useImu && instance.findCameraPoseWithIMU && imu) {
+          raw = instance.findCameraPoseWithIMU(data, imu.orientation, imu.motion)
+          imu.clear()
+        } else {
+          raw = instance.findCameraPose(data)
+        }
         if (raw) {
           lastPose = Array.from(raw)
           lastStatus = 'tracking'
@@ -121,10 +145,19 @@ export function stopContinuousTracking(): void {
     clearTimeout(trackingHandle)
     trackingHandle = null
   }
+  if (imu) {
+    imu.stop()
+    imu = null
+  }
   lastPose = null
   lastStatus = 'unavailable'
   lastImageData = null
   lastFramePoints = []
+}
+
+// 現在 IMU 連携モードで動作中か (UI 表示用)。
+export function isUsingImu(): boolean {
+  return !!instance?.findCameraPoseWithIMU
 }
 
 export function getLatestPose(): PoseResult {
