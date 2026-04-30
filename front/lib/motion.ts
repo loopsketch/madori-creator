@@ -27,9 +27,14 @@ const handleMotion = (event: DeviceMotionEvent) => {
   // accelerationIncludingGravity から重力ベクトルを取り出す。
   // 静止時はほぼ重力ベクトルそのもの。動きが大きいときはノイズが乗るが、
   // 平面検出側で複数フレーム平均化する想定。
+  //
+  // DeviceMotion の端末座標系 (+X 右, +Y 上, +Z 手前) と、backend の
+  // 深度投影や AlvaAR が前提とする OpenCV カメラ座標系 (+X 右, +Y 下,
+  // +Z 前=レンズ方向) は Y/Z 軸が反転しているため、ここで変換する。
+  // backend 側はすべての座標系を OpenCV camera 系に揃える。
   const ag = event.accelerationIncludingGravity
   const g = ag && ag.x !== null && ag.y !== null && ag.z !== null
-    ? { x: ag.x as number, y: ag.y as number, z: ag.z as number }
+    ? { x: ag.x as number, y: -(ag.y as number), z: -(ag.z as number) }
     : undefined
   latest = { ...latest, gravity: g, timestamp: Date.now() }
 }

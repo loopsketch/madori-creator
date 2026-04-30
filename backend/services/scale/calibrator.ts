@@ -8,6 +8,11 @@ import type { MotionSnapshot, RotationMatrix3, ScaleHint } from '../../types'
 // 重力ベクトルから世界座標系への回転行列を組み立てる。
 // 持ち手 150cm 仮定をスケールヒントとして提供する。
 //
+// 入力 motion.gravity は OpenCV カメラ座標系での重力ベクトルを期待する。
+// frontend (lib/motion.ts) 側で DeviceMotion → OpenCV (Y/Z 反転) を済ませてから
+// 送信されている前提。backend のすべての座標系 (深度投影、AlvaAR、点群投影)
+// もこの OpenCV camera 系で統一する。
+//
 // 世界座標系の取り方:
 //   X 軸: 水平 (撮影開始時のカメラ右方向の射影)
 //   Y 軸: 水平 (右手系で X × Z)
