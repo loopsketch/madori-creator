@@ -107,9 +107,33 @@ async function ensureModelAndCreateSession(): Promise<ort.InferenceSession> {
   }
 
   console.log(`[depth] ONNX セッションを作成中: ${modelPath}`)
-  const session = await ort.InferenceSession.create(modelPath)
+  const session = await createSessionWithFallback(modelPath)
   console.log('[depth] ONNX セッション作成完了')
   return session
+}
+
+// ONNX_EXECUTION_PROVIDER で EP を切替える。
+//   - 'cuda': CUDA のみ。失敗したら例外。
+//   - 'cpu' : CPU のみ。
+//   - 'auto' (デフォルト): CUDA → CPU の順に試し、最初に成功したものを使う。
+async function createSessionWithFallback(modelPath: string): Promise<ort.InferenceSession> {
+  const mode = (process.env.ONNX_EXECUTION_PROVIDER ?? 'auto').toLowerCase()
+  const providers = mode === 'cpu' ? ['cpu'] : mode === 'cuda' ? ['cuda'] : ['cuda', 'cpu']
+
+  let lastError: unknown
+  for (const ep of providers) {
+    try {
+      const session = await ort.InferenceSession.create(modelPath, {
+        executionProviders: [ep as ort.InferenceSession.ExecutionProviderConfig],
+      })
+      console.log(`[depth] EP=${ep} で ONNX セッションを作成しました`)
+      return session
+    } catch (err) {
+      lastError = err
+      console.warn(`[depth] EP=${ep} のセッション作成に失敗:`, err instanceof Error ? err.message : err)
+    }
+  }
+  throw lastError ?? new Error('利用可能な ONNX Execution Provider がありません')
 }
 
 // テスト用にキャッシュをリセット

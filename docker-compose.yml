@@ -45,6 +45,8 @@ services:
       - SESSION_STORE=redis
       # 深度推定の選択: 'onnx' (デフォルト、Depth Anything V2 small) | 'mock' (常に固定深度)
       - DEPTH_ESTIMATOR=onnx
+      # ONNX Execution Provider の選択: 'auto' (CUDA→CPU フォールバック) | 'cuda' | 'cpu'
+      - ONNX_EXECUTION_PROVIDER=auto
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
@@ -53,6 +55,17 @@ services:
     command: sh -c 'npm install && npm run dev'
     ports:
       - "3001:3000"
+    # GPU を全て割り当て (docker run --gpus all 相当)。
+    # 前提: ホストに NVIDIA ドライバ + NVIDIA Container Toolkit が入っていること。
+    # backend イメージ側にも CUDA ランタイムが必要 (現状の node:20-slim では CUDA 非対応のため
+    # CUDA EP は無効化される。CUDA 利用時は Dockerfile を nvidia/cuda ベースへ切替)。
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     depends_on:
       redis:
         condition: service_started
