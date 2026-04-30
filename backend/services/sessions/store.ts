@@ -92,7 +92,7 @@ export async function appendFrame(
   }
   state.frames.push(record)
 
-  // 最初の有効な motion で世界座標系を確定する。
+  // 最初の有効な motion で世界座標系を確定する (DeviceMotion フォールバック用の初期値)。
   if (!state.worldOrientation && input.motion?.gravity) {
     const calib = calibrateFromMotion(input.motion)
     if (calib.worldOrientation) {
@@ -102,16 +102,30 @@ export async function appendFrame(
     state.scaleHint = calib.scaleHint
   }
 
-  // 最初の tracking 中の AlvaAR pose を初期 pose として保存する (issue #26)。
-  // worldOrientation がまだ無い場合は確定を待つ (両方揃って初めて意味をなすため)。
+  // AlvaAR が tracking に入った最初のフレームで、worldOrientation と baseAlvaPose を
+  // **同時に再確定**する (issue #26)。両者が異なるタイミングで決まっていると
+  // 「camera_0 → madori_world」と「camera_N → AR_world」の対応が取れず、点群が
+  // 世界座標で整合しない。同期したフレーム以降は AlvaAR pose を信頼して統合する。
+  // それまでに蓄積された点群は異なる基準で投影されているのでリセットする。
   if (
     !state.baseAlvaPose &&
-    state.worldOrientation &&
     input.motion?.poseTracking === 'tracking' &&
+    input.motion.gravity &&
     input.motion.cameraPose &&
     input.motion.cameraPose.length >= 16
   ) {
-    state.baseAlvaPose = input.motion.cameraPose.slice()
+    const calib = calibrateFromMotion(input.motion)
+    if (calib.worldOrientation) {
+      state.worldOrientation = calib.worldOrientation
+      state.baseAlphaDeg = input.motion.orientation?.alpha
+      state.baseAlvaPose = input.motion.cameraPose.slice()
+      state.scaleHint = calib.scaleHint
+      // 同期前に DeviceMotion ベースで投影された点群はリセットする
+      state.pointCloud = []
+      state.walls = []
+      state.wallTracker = createWallTrackerState()
+      state.floor = undefined
+    }
   }
 
   if (input.depthMap) {
