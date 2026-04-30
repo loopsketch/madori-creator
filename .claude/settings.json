@@ -11,8 +11,15 @@
       "Bash(curl -sk https://localhost:8443/api/sessions -X POST)",
       "Bash(curl -sk https://localhost:8443/api/health)",
       "Bash(curl -s http://localhost:3001/api/health)",
-      "Bash(curl -s -X POST http://localhost:3001/api/sessions)"
+      "Bash(curl -s -X POST http://localhost:3001/api/sessions)",
+      "Bash(npx vitest *)"
     ],
     "additionalDirectories": []
+  },
+  "customApiEndpoints": {
+    "local-llm": {
+      "baseURL": "http://192.168.10.140:8080",
+      "apiKey": "llama.cpp"
+    }
   }
 }
