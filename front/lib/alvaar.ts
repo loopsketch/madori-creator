@@ -8,6 +8,7 @@
 
 interface AlvaARInstance {
   findCameraPose: (imageData: ImageData) => Float32Array | null
+  getFramePoints?: () => Array<{ x: number; y: number }>
 }
 
 interface AlvaARConstructor {
@@ -18,6 +19,8 @@ let instance: AlvaARInstance | null = null
 let trackingHandle: ReturnType<typeof setTimeout> | null = null
 let lastPose: number[] | null = null
 let lastStatus: PoseTracking = 'unavailable'
+let lastImageData: ImageData | null = null
+let lastFramePoints: Array<{ x: number; y: number }> = []
 
 export type PoseTracking = 'tracking' | 'lost' | 'unavailable'
 
@@ -84,6 +87,7 @@ export function startContinuousTracking(
     }
     const data = provide()
     if (data) {
+      lastImageData = data
       try {
         const raw = instance.findCameraPose(data)
         if (raw) {
@@ -95,6 +99,15 @@ export function startContinuousTracking(
       } catch (err) {
         console.warn('[alvaar] 継続 tracking で例外:', err)
         lastStatus = 'lost'
+      }
+      // 特徴点 (ORB feature points) を保存。デバッグ表示用。
+      if (instance.getFramePoints) {
+        try {
+          const pts = instance.getFramePoints()
+          if (Array.isArray(pts)) lastFramePoints = pts
+        } catch {
+          /* ignore */
+        }
       }
     }
     trackingHandle = setTimeout(tick, intervalMs)
@@ -110,10 +123,20 @@ export function stopContinuousTracking(): void {
   }
   lastPose = null
   lastStatus = 'unavailable'
+  lastImageData = null
+  lastFramePoints = []
 }
 
 export function getLatestPose(): PoseResult {
   return { pose: lastPose, status: lastStatus }
+}
+
+export function getLatestImageData(): ImageData | null {
+  return lastImageData
+}
+
+export function getLatestFramePoints(): Array<{ x: number; y: number }> {
+  return lastFramePoints
 }
 
 export function dispose(): void {

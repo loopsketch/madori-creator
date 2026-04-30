@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
 import {
+  AlvaDebugView,
   CameraView,
   CanvasDrawing,
   MapView,
@@ -218,8 +219,11 @@ function App() {
           )}
         </div>
 
-        {/* 間取り図 SVG (右上) */}
-        <MapView svg={svg} width={200} height={200} />
+        {/* 間取り図 SVG (右上) と AlvaAR デバッグビュー */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <MapView svg={svg} width={200} height={200} />
+          <AlvaDebugView active={isCapturing} width={200} height={150} />
+        </div>
       </div>
     </div>
   )
