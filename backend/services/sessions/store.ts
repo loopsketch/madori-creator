@@ -7,6 +7,10 @@ import {
 } from '../depth/pointcloud'
 import { voxelDownsample } from '../depth/voxel'
 import { detectFloorAndWalls } from '../reconstruction'
+import {
+  createWallTrackerState,
+  ingestWalls,
+} from '../reconstruction/wallTracker'
 import { renderTopdownSvg } from '../render'
 import { InMemoryRepository } from './memory-repository'
 import type { SessionRepository } from './repository'
@@ -53,6 +57,7 @@ export async function createSession(
     scaleHint: { handHeldHeightM: HAND_HELD_HEIGHT_M },
     pointCloud: [],
     walls: [],
+    wallTracker: createWallTrackerState(),
   }
   return await repository.create(state)
 }
@@ -119,10 +124,16 @@ function integrateDepth(state: SessionState, depthMap: DepthMap): void {
   if (state.pointCloud.length >= RANSAC_MIN_POINTS) {
     const detection = detectFloorAndWalls(state.pointCloud)
     state.floor = detection.floor
-    state.walls = detection.walls
+    const tracked = ingestWalls(
+      state.wallTracker,
+      state.frames.length - 1,
+      detection.walls
+    )
+    state.wallTracker = tracked.next
+    state.walls = tracked.stable
     state.metrics = {
       pointCount: state.pointCloud.length,
-      wallCount: detection.walls.length,
+      wallCount: state.walls.length,
     }
   } else {
     state.metrics = {

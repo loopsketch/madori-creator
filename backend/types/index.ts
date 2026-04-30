@@ -4,7 +4,9 @@
 // 実装の詳細とともにあるが、ここから再 export して周辺コードからの参照を容易にする。
 
 import type { Floor, Point3D, Wall } from '../services/reconstruction/types'
+import type { WallTrackerState } from '../services/reconstruction/wallTracker'
 export type { Floor, Plane, Point3D, Vec3, Wall } from '../services/reconstruction/types'
+export type { WallTrackerState } from '../services/reconstruction/wallTracker'
 
 export type ReconstructionStatus = 'received' | 'processing' | 'done' | 'failed'
 
@@ -97,6 +99,8 @@ export interface SessionState {
   // 直近の RANSAC 結果
   floor?: Floor
   walls: Wall[]
+  // 壁線の時系列マージ用トラッカー状態 (issue #22)
+  wallTracker: WallTrackerState
 }
 
 // 深度推定 (#16)
