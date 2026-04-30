@@ -75,4 +75,5 @@ iPhone Safari (推奨) または Android Chrome で実機テストする手順�
 ## 関連ドキュメント
 
 - アーキテクチャ詳細: [`docs/architecture.md`](docs/architecture.md)
-- 開発環境の立て直しメモ: [`docs/開発環境の立て直し.md`](docs/開発環境の立て直し.md)
+- 開発環境ガイド: [`docs/development.md`](docs/development.md)
+- フォルダ構成: [`docs/structure.md`](docs/structure.md)
