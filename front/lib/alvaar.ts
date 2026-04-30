@@ -25,10 +25,15 @@ export interface PoseResult {
 
 // 初回呼び出しでモジュールを動的 import し、AlvaAR を初期化する。
 // 失敗時は status='unavailable' のフォールバックモードに入る (推定なし)。
+//
+// 実装メモ: AlvaAR は public/poc/lib/ に静的配信されており、Vite のバンドル対象
+// 外として扱う必要がある。文字列リテラルでの dynamic import は Vite が静的解析
+// しようとして失敗するため、URL を実行時に組み立てて回避する。
 export async function initialize(width: number, height: number): Promise<boolean> {
   if (instance) return true
   try {
-    const url = '/poc/lib/alva_ar.js'
+    const path = '/poc/lib/alva_ar.js'
+    const url = `${window.location.origin}${path}`
     const mod = (await import(/* @vite-ignore */ url)) as { AlvaAR?: AlvaARConstructor }
     if (!mod.AlvaAR) throw new Error('AlvaAR エクスポートが見つからない')
     instance = await mod.AlvaAR.Initialize(width, height)
