@@ -1,4 +1,8 @@
-import { calibrateFromMotion, HAND_HELD_HEIGHT_M } from '../scale/calibrator'
+import {
+  calibrateFromMotion,
+  computeFrameOrientation,
+  HAND_HELD_HEIGHT_M,
+} from '../scale/calibrator'
 import { getDefaultIntrinsics } from '../depth/intrinsics'
 import {
   normalizeDepthByMedian,
@@ -92,12 +96,13 @@ export async function appendFrame(
     const calib = calibrateFromMotion(input.motion)
     if (calib.worldOrientation) {
       state.worldOrientation = calib.worldOrientation
+      state.baseAlphaDeg = input.motion.orientation?.alpha
     }
     state.scaleHint = calib.scaleHint
   }
 
   if (input.depthMap) {
-    integrateDepth(state, input.depthMap)
+    integrateDepth(state, input.depthMap, input.motion)
   }
 
   state.currentSvg = renderTopdownSvg(state.floor, state.walls)
@@ -105,13 +110,22 @@ export async function appendFrame(
   return state
 }
 
-function integrateDepth(state: SessionState, depthMap: DepthMap): void {
+function integrateDepth(
+  state: SessionState,
+  depthMap: DepthMap,
+  motion?: MotionSnapshot
+): void {
   const handHeight = state.scaleHint?.handHeldHeightM ?? HAND_HELD_HEIGHT_M
   // 相対深度 → 絶対深度 (中央値が持ち手高さに対応すると仮定)
   const normalized = normalizeDepthByMedian(depthMap, handHeight)
   const intrinsics = getDefaultIntrinsics(normalized.width, normalized.height)
   const camPoints = projectToCamera(normalized, intrinsics, { stride: POINT_PROJECTION_STRIDE })
-  const worldPoints = transformToWorld(camPoints, state.worldOrientation)
+  // フレームごとに姿勢を再計算する (issue #23)。失敗時は初期姿勢にフォールバック。
+  const frameOrientation = state.worldOrientation
+    ? computeFrameOrientation(motion, state.worldOrientation, state.baseAlphaDeg) ??
+      state.worldOrientation
+    : undefined
+  const worldPoints = transformToWorld(camPoints, frameOrientation)
 
   const merged: Point3D[] = state.pointCloud.length === 0
     ? worldPoints
