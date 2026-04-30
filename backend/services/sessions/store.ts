@@ -2,6 +2,7 @@ import {
   calibrateFromMotion,
   computeFrameOrientation,
   HAND_HELD_HEIGHT_M,
+  transformAlvaPose,
 } from '../scale/calibrator'
 import { getDefaultIntrinsics } from '../depth/intrinsics'
 import {
@@ -101,6 +102,18 @@ export async function appendFrame(
     state.scaleHint = calib.scaleHint
   }
 
+  // 最初の tracking 中の AlvaAR pose を初期 pose として保存する (issue #26)。
+  // worldOrientation がまだ無い場合は確定を待つ (両方揃って初めて意味をなすため)。
+  if (
+    !state.baseAlvaPose &&
+    state.worldOrientation &&
+    input.motion?.poseTracking === 'tracking' &&
+    input.motion.cameraPose &&
+    input.motion.cameraPose.length >= 16
+  ) {
+    state.baseAlvaPose = input.motion.cameraPose.slice()
+  }
+
   if (input.depthMap) {
     integrateDepth(state, input.depthMap, input.motion)
   }
@@ -120,12 +133,36 @@ function integrateDepth(
   const normalized = normalizeDepthByMedian(depthMap, handHeight)
   const intrinsics = getDefaultIntrinsics(normalized.width, normalized.height)
   const camPoints = projectToCamera(normalized, intrinsics, { stride: POINT_PROJECTION_STRIDE })
-  // フレームごとに姿勢を再計算する (issue #23)。失敗時は初期姿勢にフォールバック。
-  const frameOrientation = state.worldOrientation
-    ? computeFrameOrientation(motion, state.worldOrientation, state.baseAlphaDeg) ??
+
+  // 姿勢の選択 (優先順):
+  //   1. AlvaAR の pose (issue #26): tracking 中で初期 pose 確定済みなら、平行移動も含む
+  //   2. DeviceMotion から計算したフレーム姿勢 (issue #23): pitch/roll/yaw のみ反映
+  //   3. 初期 worldOrientation (フォールバック)
+  let frameRotation = state.worldOrientation
+  let frameTranslation: { x: number; y: number; z: number } | undefined
+  if (
+    state.worldOrientation &&
+    state.baseAlvaPose &&
+    motion?.poseTracking === 'tracking' &&
+    motion.cameraPose
+  ) {
+    const transformed = transformAlvaPose(
+      motion.cameraPose,
+      state.baseAlvaPose,
       state.worldOrientation
-    : undefined
-  const worldPoints = transformToWorld(camPoints, frameOrientation)
+    )
+    if (transformed) {
+      frameRotation = transformed.rotation
+      frameTranslation = transformed.translation
+    }
+  }
+  if (!frameTranslation && state.worldOrientation) {
+    // AlvaAR が使えないフレームでは姿勢のみ更新する
+    frameRotation =
+      computeFrameOrientation(motion, state.worldOrientation, state.baseAlphaDeg) ??
+      state.worldOrientation
+  }
+  const worldPoints = transformToWorld(camPoints, frameRotation, frameTranslation)
 
   const merged: Point3D[] = state.pointCloud.length === 0
     ? worldPoints

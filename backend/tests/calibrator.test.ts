@@ -2,8 +2,23 @@ import {
   calibrateFromMotion,
   computeFrameOrientation,
   HAND_HELD_HEIGHT_M,
+  transformAlvaPose,
 } from '../services/scale/calibrator'
 import type { RotationMatrix3 } from '../types'
+
+// 4x4 列優先の単位行列。
+function identity4(): number[] {
+  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+}
+
+// 4x4 列優先の rigid (回転無し + translation) を作る。
+function translate4(tx: number, ty: number, tz: number): number[] {
+  const m = identity4()
+  m[12] = tx
+  m[13] = ty
+  m[14] = tz
+  return m
+}
 
 // 回転行列に対して v_camera を掛けた結果を返す
 function applyMatrix(R: number[], v: { x: number; y: number; z: number }) {
@@ -174,5 +189,55 @@ describe('computeFrameOrientation', () => {
     const dot12 = r[3] * r[6] + r[4] * r[7] + r[5] * r[8]
     expect(dot01).toBeCloseTo(0, 5)
     expect(dot12).toBeCloseTo(0, 5)
+  })
+})
+
+describe('transformAlvaPose', () => {
+  const baseOrientation = calibrateFromMotion({
+    gravity: { x: 0, y: -9.80665, z: 0 },
+  }).worldOrientation as RotationMatrix3
+
+  it('入力長が不足すると undefined', () => {
+    expect(transformAlvaPose([], identity4(), baseOrientation)).toBeUndefined()
+    expect(transformAlvaPose(identity4(), [], baseOrientation)).toBeUndefined()
+  })
+
+  it('current=base なら translation はゼロ、rotation は baseOrientation と一致', () => {
+    const r = transformAlvaPose(identity4(), identity4(), baseOrientation)
+    expect(r).toBeDefined()
+    expect(r!.translation.x).toBeCloseTo(0, 6)
+    expect(r!.translation.y).toBeCloseTo(0, 6)
+    expect(r!.translation.z).toBeCloseTo(0, 6)
+    for (let i = 0; i < 9; i++) {
+      expect(r!.rotation[i]).toBeCloseTo(baseOrientation[i], 6)
+    }
+  })
+
+  it('AR_world で +X 方向に 1m 移動すると translation は baseOrientation × (1,0,0)', () => {
+    const cur = translate4(1, 0, 0)
+    const r = transformAlvaPose(cur, identity4(), baseOrientation)!
+    // baseOrientation × (1,0,0) = (R[0], R[3], R[6])
+    expect(r.translation.x).toBeCloseTo(baseOrientation[0], 6)
+    expect(r.translation.y).toBeCloseTo(baseOrientation[3], 6)
+    expect(r.translation.z).toBeCloseTo(baseOrientation[6], 6)
+  })
+
+  it('basePose をオフセットしても相対変位だけが反映される', () => {
+    const base = translate4(5, 2, -3)
+    const cur = translate4(6, 2, -3) // base から +X に 1m
+    const r = transformAlvaPose(cur, base, baseOrientation)!
+    expect(r.translation.x).toBeCloseTo(baseOrientation[0], 6)
+    expect(r.translation.y).toBeCloseTo(baseOrientation[3], 6)
+    expect(r.translation.z).toBeCloseTo(baseOrientation[6], 6)
+  })
+
+  it('rotation 行列の正規直交性が保たれる', () => {
+    const cur = translate4(0.5, -0.2, 0.3)
+    const r = transformAlvaPose(cur, identity4(), baseOrientation)!
+    for (let i = 0; i < 3; i++) {
+      const row = [r.rotation[i * 3], r.rotation[i * 3 + 1], r.rotation[i * 3 + 2]]
+      const len = Math.sqrt(row[0] ** 2 + row[1] ** 2 + row[2] ** 2)
+      expect(len).toBeCloseTo(1, 5)
+    }
   })
 })

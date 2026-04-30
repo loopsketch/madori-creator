@@ -18,6 +18,7 @@ import {
   startTracking,
   stopTracking,
 } from './lib/motion'
+import * as alvaar from './lib/alvaar'
 import './index.css'
 
 // 撮影ストリーミング UI。
@@ -42,13 +43,24 @@ function App() {
 
   const captureLoop = useCallback(async (sid: string) => {
     while (capturingRef.current) {
-      const blob = await cameraRef.current?.captureFrameBlob().catch(() => null)
+      const captured = await cameraRef.current
+        ?.captureFrame()
+        .catch(() => ({ blob: null, imageData: null }))
+      const blob = captured?.blob
+      const imageData = captured?.imageData
       if (!blob) {
         // ビデオがまだ準備できていない等。少し待って再試行。
         await new Promise((r) => setTimeout(r, 100))
         continue
       }
-      const motion = getSnapshot()
+      const motion = { ...getSnapshot() }
+      // AlvaAR で各フレームのカメラ pose を計算 (issue #26)。
+      // 取得失敗時は status のみを送り、backend は DeviceMotion ベースに自動フォールバック。
+      if (imageData && alvaar.isInitialized()) {
+        const result = alvaar.findPose(imageData)
+        motion.poseTracking = result.status
+        if (result.pose) motion.cameraPose = result.pose
+      }
       const t0 = performance.now()
       try {
         const result = await postFrameToSession(sid, blob, motion)
@@ -83,6 +95,7 @@ function App() {
         sessionIdRef.current = null
       }
       stopTracking()
+      alvaar.dispose()
       return
     }
 
@@ -101,6 +114,12 @@ function App() {
       return
     }
     startTracking()
+    // AlvaAR を初期化 (issue #26)。失敗してもフォールバックで継続する。
+    setStatusMessage('AlvaAR 初期化中...')
+    const alvaReady = await alvaar.initialize(640, 480).catch(() => false)
+    if (!alvaReady) {
+      setErrorMessage((prev) => prev ?? 'AlvaAR が利用できないため DeviceMotion のみで進行')
+    }
 
     try {
       const session = await createSession()
@@ -114,6 +133,7 @@ function App() {
       captureLoop(session.sessionId)
     } catch (err) {
       stopTracking()
+      alvaar.dispose()
       setErrorMessage((err as Error).message)
       setStatusMessage('待機中')
     }

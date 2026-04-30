@@ -54,6 +54,10 @@ export interface MotionSnapshot {
   orientation?: { alpha: number; beta: number; gamma: number }
   // フレーム取得時刻 (ms epoch)
   timestamp?: number
+  // AlvaAR (issue #26) で取得したカメラ pose。4x4 列優先 camera-to-world、OpenCV 系。
+  cameraPose?: number[]
+  // AlvaAR の tracking 状態。'tracking' 以外は cameraPose を使わずフォールバックする。
+  poseTracking?: 'tracking' | 'lost' | 'unavailable'
 }
 
 // 3x3 回転行列 (列優先表現を採るが、ここでは要素 9 個の配列として扱う)
@@ -95,6 +99,9 @@ export interface SessionState {
   worldOrientation?: RotationMatrix3
   // 撮影開始時の DeviceOrientation alpha (yaw 差分計算用、issue #23)
   baseAlphaDeg?: number
+  // 撮影開始時の AlvaAR pose (4x4 列優先、issue #26)。これと worldOrientation の対応を
+  // 使い、各フレームの cameraPose を madori 世界座標系の camera→world 行列に変換する。
+  baseAlvaPose?: number[]
   // 疑似スケールパラメータ
   scaleHint?: ScaleHint
   // 累積点群 (世界座標、voxel ダウンサンプル済み)

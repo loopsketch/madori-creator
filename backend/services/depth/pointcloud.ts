@@ -45,19 +45,25 @@ export function projectToCamera(
 
 // camera → world の回転行列 (3x3、行=世界軸の camera 表現) を点群に適用する。
 // worldOrientation が未確定なら点群をそのまま返す (姿勢未設定のフレーム想定)。
+// translation を併せて指定すると、回転後に並進を加える (issue #26 で AlvaAR の
+// カメラ位置を反映する用途)。
 export function transformToWorld(
   camPoints: Point3D[],
-  worldOrientation?: RotationMatrix3
+  worldOrientation?: RotationMatrix3,
+  translation?: { x: number; y: number; z: number }
 ): Point3D[] {
   if (!worldOrientation) return camPoints.slice()
   const R = worldOrientation
+  const tx = translation?.x ?? 0
+  const ty = translation?.y ?? 0
+  const tz = translation?.z ?? 0
   const out: Point3D[] = new Array(camPoints.length)
   for (let i = 0; i < camPoints.length; i++) {
     const p = camPoints[i]
     out[i] = {
-      x: R[0] * p.x + R[1] * p.y + R[2] * p.z,
-      y: R[3] * p.x + R[4] * p.y + R[5] * p.z,
-      z: R[6] * p.x + R[7] * p.y + R[8] * p.z,
+      x: R[0] * p.x + R[1] * p.y + R[2] * p.z + tx,
+      y: R[3] * p.x + R[4] * p.y + R[5] * p.z + ty,
+      z: R[6] * p.x + R[7] * p.y + R[8] * p.z + tz,
     }
   }
   return out

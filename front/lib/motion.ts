@@ -6,6 +6,10 @@ export interface MotionSnapshot {
   gravity?: { x: number; y: number; z: number }
   orientation?: { alpha: number; beta: number; gamma: number }
   timestamp: number
+  // AlvaAR (issue #26) で取得したカメラ pose。4x4 列優先 (camera-to-world、OpenCV 系)。
+  // tracking lost や未初期化時は cameraPose は省略され、poseTracking で状態を伝える。
+  cameraPose?: number[]
+  poseTracking?: 'tracking' | 'lost' | 'unavailable'
 }
 
 interface DeviceMotionEventStatic {

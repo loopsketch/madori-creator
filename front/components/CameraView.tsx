@@ -8,10 +8,23 @@ import {
 
 // 背面カメラ映像を表示するコンポーネント。
 // 撮影ループ自体は親 (App.tsx) が制御する。CameraView は video 要素を保持し、
-// captureFrameBlob() メソッドで現在のフレームを JPEG Blob として返す。
+// captureFrame() メソッドで現在のフレームを JPEG Blob と AlvaAR 用 ImageData の
+// ペアとして返す。Blob と ImageData は同じ瞬間のフレームから生成される。
+
+export interface CaptureFrameOptions {
+  // JPEG 品質 (0-1)
+  quality?: number
+  // ImageData の縮小サイズ。AlvaAR は計算量を抑えるため 640x480 程度を想定
+  downscale?: { width: number; height: number }
+}
+
+export interface CaptureFrameResult {
+  blob: Blob | null
+  imageData: ImageData | null
+}
 
 export interface CameraViewHandle {
-  captureFrameBlob: (quality?: number) => Promise<Blob | null>
+  captureFrame: (options?: CaptureFrameOptions) => Promise<CaptureFrameResult>
   isReady: () => boolean
 }
 
@@ -24,6 +37,8 @@ export const CameraView = forwardRef<CameraViewHandle, CameraViewProps>(
   function CameraView({ isCapturing, onToggleCapture }, ref) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
+    // ImageData (AlvaAR 入力) 用の縮小キャンバス
+    const downscaleCanvasRef = useRef<HTMLCanvasElement>(null)
     const [ready, setReady] = useState(false)
     const [cameraError, setCameraError] = useState<string | null>(null)
     const [hasMediaDevices] = useState(
@@ -92,19 +107,37 @@ export const CameraView = forwardRef<CameraViewHandle, CameraViewProps>(
       ref,
       () => ({
         isReady: () => ready,
-        captureFrameBlob: async (quality = 0.85) => {
+        captureFrame: async (options = {}) => {
           const video = videoRef.current
           const canvas = canvasRef.current
-          if (!video || !canvas) return null
-          if (video.videoWidth === 0 || video.videoHeight === 0) return null
+          const downscaleCanvas = downscaleCanvasRef.current
+          const empty: CaptureFrameResult = { blob: null, imageData: null }
+          if (!video || !canvas) return empty
+          if (video.videoWidth === 0 || video.videoHeight === 0) return empty
+
+          const quality = options.quality ?? 0.85
           canvas.width = video.videoWidth
           canvas.height = video.videoHeight
           const ctx = canvas.getContext('2d')
-          if (!ctx) return null
+          if (!ctx) return empty
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-          return await new Promise<Blob | null>((resolve) =>
+
+          let imageData: ImageData | null = null
+          if (downscaleCanvas) {
+            const ds = options.downscale ?? { width: 640, height: 480 }
+            downscaleCanvas.width = ds.width
+            downscaleCanvas.height = ds.height
+            const dctx = downscaleCanvas.getContext('2d')
+            if (dctx) {
+              dctx.drawImage(canvas, 0, 0, ds.width, ds.height)
+              imageData = dctx.getImageData(0, 0, ds.width, ds.height)
+            }
+          }
+
+          const blob = await new Promise<Blob | null>((resolve) =>
             canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
           )
+          return { blob, imageData }
         },
       }),
       [ready]
@@ -120,6 +153,7 @@ export const CameraView = forwardRef<CameraViewHandle, CameraViewProps>(
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
+        <canvas ref={downscaleCanvasRef} style={{ display: 'none' }} />
 
         {cameraError && (
           <div

@@ -167,3 +167,105 @@ function rotateAroundAxis(v: Vec3, axis: Vec3, angleRad: number): Vec3 {
     z: v.z * cos + c.z * sin + axis.z * k * (1 - cos),
   }
 }
+
+// issue #26: AlvaAR pose を madori 世界座標系の (rotation, translation) に変換する。
+//
+// 入力:
+//   currentPose      : フレーム F の AlvaAR pose (4x4 列優先, camera-to-world, OpenCV 系)
+//   basePose         : 撮影開始時の AlvaAR pose (= 初期 camera_0 の AR_world 位置)
+//   baseOrientation  : camera_0 → madori_world の 3x3 回転 (calibrator から取得済み)
+//
+// AlvaAR の AR_world は camera_0 のローカル座標系と一致するため、相対 pose
+// (basePose^-1 × currentPose) は「camera_F → camera_0」を表す。これに baseOrientation
+// を掛けると madori 世界座標系での camera_F の rotation と translation が得られる。
+export interface FramePose {
+  rotation: RotationMatrix3
+  translation: Vec3
+}
+
+export function transformAlvaPose(
+  currentPose: number[],
+  basePose: number[],
+  baseOrientation: RotationMatrix3
+): FramePose | undefined {
+  if (currentPose.length < 16 || basePose.length < 16) return undefined
+
+  const baseInv = invertRigidMat4(basePose)
+  if (!baseInv) return undefined
+  const rel = multiplyMat4(baseInv, currentPose)
+
+  const relRot: RotationMatrix3 = [
+    rel[0], rel[1], rel[2],
+    rel[4], rel[5], rel[6],
+    rel[8], rel[9], rel[10],
+  ]
+  const relT: Vec3 = { x: rel[12], y: rel[13], z: rel[14] }
+
+  return {
+    rotation: multiplyRotMat3(baseOrientation, relRot),
+    translation: applyRotMat3(baseOrientation, relT),
+  }
+}
+
+// 4x4 列優先で rigid (回転 + 並進のみ) を仮定した逆変換。
+function invertRigidMat4(m: number[]): number[] | undefined {
+  // rigid なので回転は転置で逆。並進は -R^T t。
+  const r = [
+    m[0], m[1], m[2],
+    m[4], m[5], m[6],
+    m[8], m[9], m[10],
+  ]
+  const t = { x: m[12], y: m[13], z: m[14] }
+  // 転置回転 (= 逆回転)
+  const rT = [
+    r[0], r[3], r[6],
+    r[1], r[4], r[7],
+    r[2], r[5], r[8],
+  ]
+  const tInv = {
+    x: -(rT[0] * t.x + rT[1] * t.y + rT[2] * t.z),
+    y: -(rT[3] * t.x + rT[4] * t.y + rT[5] * t.z),
+    z: -(rT[6] * t.x + rT[7] * t.y + rT[8] * t.z),
+  }
+  return [
+    rT[0], rT[1], rT[2], 0,
+    rT[3], rT[4], rT[5], 0,
+    rT[6], rT[7], rT[8], 0,
+    tInv.x, tInv.y, tInv.z, 1,
+  ]
+}
+
+// 4x4 列優先行列の積 (a × b)。
+function multiplyMat4(a: number[], b: number[]): number[] {
+  const out: number[] = new Array(16).fill(0)
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      let s = 0
+      for (let k = 0; k < 4; k++) {
+        s += a[k * 4 + i] * b[j * 4 + k]
+      }
+      out[j * 4 + i] = s
+    }
+  }
+  return out
+}
+
+// 3x3 行列の積 (row-major、a × b)。
+function multiplyRotMat3(a: RotationMatrix3, b: RotationMatrix3): RotationMatrix3 {
+  const out: number[] = new Array(9).fill(0)
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      out[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[j + 3] + a[i * 3 + 2] * b[j + 6]
+    }
+  }
+  return out as RotationMatrix3
+}
+
+// 3x3 行列 × vec3 (row-major)
+function applyRotMat3(r: RotationMatrix3, v: Vec3): Vec3 {
+  return {
+    x: r[0] * v.x + r[1] * v.y + r[2] * v.z,
+    y: r[3] * v.x + r[4] * v.y + r[5] * v.z,
+    z: r[6] * v.x + r[7] * v.y + r[8] * v.z,
+  }
+}

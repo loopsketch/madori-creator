@@ -73,6 +73,13 @@ describe('projectToCamera + transformToWorld', () => {
     expect(out).toEqual(cam)
     expect(out).not.toBe(cam) // コピーされていることを期待
   })
+
+  it('translation を併せて指定すると回転後に並進が加わる (issue #26)', () => {
+    const cam = [{ x: 0, y: 0, z: 0 }]
+    const I: RotationMatrix3 = [1, 0, 0, 0, 1, 0, 0, 0, 1]
+    const out = transformToWorld(cam, I, { x: 1, y: 2, z: 3 })
+    expect(out[0]).toEqual({ x: 1, y: 2, z: 3 })
+  })
 })
 
 describe('voxelDownsample', () => {
