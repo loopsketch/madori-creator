@@ -15,6 +15,9 @@ interface AlvaARConstructor {
 }
 
 let instance: AlvaARInstance | null = null
+let trackingHandle: ReturnType<typeof setTimeout> | null = null
+let lastPose: number[] | null = null
+let lastStatus: PoseTracking = 'unavailable'
 
 export type PoseTracking = 'tracking' | 'lost' | 'unavailable'
 
@@ -22,6 +25,8 @@ export interface PoseResult {
   pose: number[] | null
   status: PoseTracking
 }
+
+export type ImageDataProvider = () => ImageData | null
 
 // 初回呼び出しでモジュールを動的 import し、AlvaAR を初期化する。
 // 失敗時は status='unavailable' のフォールバックモードに入る (推定なし)。
@@ -63,6 +68,55 @@ export function findPose(imageData: ImageData): PoseResult {
   }
 }
 
+// AlvaAR は連続フレームから動きを推定するため、backend 送信ループ
+// (~1Hz) では間隔が空きすぎて頻繁に tracking lost する。本関数で
+// 独立した高頻度ループを起動し、毎回 latest pose を更新する。
+// backend 送信側は getLatestPose() で最新値を読むだけ。
+export function startContinuousTracking(
+  provide: ImageDataProvider,
+  intervalMs = 33
+): void {
+  if (trackingHandle !== null) return
+  const tick = () => {
+    if (!instance) {
+      trackingHandle = null
+      return
+    }
+    const data = provide()
+    if (data) {
+      try {
+        const raw = instance.findCameraPose(data)
+        if (raw) {
+          lastPose = Array.from(raw)
+          lastStatus = 'tracking'
+        } else {
+          lastStatus = 'lost'
+        }
+      } catch (err) {
+        console.warn('[alvaar] 継続 tracking で例外:', err)
+        lastStatus = 'lost'
+      }
+    }
+    trackingHandle = setTimeout(tick, intervalMs)
+  }
+  lastStatus = 'lost'
+  tick()
+}
+
+export function stopContinuousTracking(): void {
+  if (trackingHandle !== null) {
+    clearTimeout(trackingHandle)
+    trackingHandle = null
+  }
+  lastPose = null
+  lastStatus = 'unavailable'
+}
+
+export function getLatestPose(): PoseResult {
+  return { pose: lastPose, status: lastStatus }
+}
+
 export function dispose(): void {
+  stopContinuousTracking()
   instance = null
 }

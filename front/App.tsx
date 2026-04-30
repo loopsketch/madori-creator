@@ -56,10 +56,10 @@ function App() {
         continue
       }
       const motion = { ...getSnapshot() }
-      // AlvaAR で各フレームのカメラ pose を計算 (issue #26)。
-      // 取得失敗時は status のみを送り、backend は DeviceMotion ベースに自動フォールバック。
-      if (imageData && alvaar.isInitialized()) {
-        const result = alvaar.findPose(imageData)
+      // AlvaAR は startContinuousTracking で別ループ (30Hz) で動かしているので、
+      // ここでは最新 pose を取り出すだけ。tracking 状態に応じて backend に渡す。
+      if (alvaar.isInitialized()) {
+        const result = alvaar.getLatestPose()
         motion.poseTracking = result.status
         if (result.pose) motion.cameraPose = result.pose
         setAlvaStatus(result.status)
@@ -69,7 +69,7 @@ function App() {
           )
         }
       } else {
-        setAlvaStatus(alvaar.isInitialized() ? 'no-image' : 'unavailable')
+        setAlvaStatus('unavailable')
       }
       const t0 = performance.now()
       try {
@@ -105,6 +105,7 @@ function App() {
         sessionIdRef.current = null
       }
       stopTracking()
+      alvaar.stopContinuousTracking()
       alvaar.dispose()
       return
     }
@@ -129,6 +130,13 @@ function App() {
     const alvaReady = await alvaar.initialize(640, 480).catch(() => false)
     if (!alvaReady) {
       setErrorMessage((prev) => prev ?? 'AlvaAR が利用できないため DeviceMotion のみで進行')
+    } else {
+      // backend 送信ループ (~1Hz) とは独立に AlvaAR を 30Hz で回し、tracking
+      // が切れにくいようにする。
+      alvaar.startContinuousTracking(
+        () => cameraRef.current?.captureImageData() ?? null,
+        33
+      )
     }
 
     try {
@@ -143,6 +151,7 @@ function App() {
       captureLoop(session.sessionId)
     } catch (err) {
       stopTracking()
+      alvaar.stopContinuousTracking()
       alvaar.dispose()
       setErrorMessage((err as Error).message)
       setStatusMessage('待機中')

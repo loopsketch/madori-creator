@@ -25,6 +25,8 @@ export interface CaptureFrameResult {
 
 export interface CameraViewHandle {
   captureFrame: (options?: CaptureFrameOptions) => Promise<CaptureFrameResult>
+  // AlvaAR の継続 tracking 用に、軽量に ImageData だけを取得する同期メソッド。
+  captureImageData: (size?: { width: number; height: number }) => ImageData | null
   isReady: () => boolean
 }
 
@@ -107,6 +109,18 @@ export const CameraView = forwardRef<CameraViewHandle, CameraViewProps>(
       ref,
       () => ({
         isReady: () => ready,
+        captureImageData: (size = { width: 640, height: 480 }) => {
+          const video = videoRef.current
+          const downscaleCanvas = downscaleCanvasRef.current
+          if (!video || !downscaleCanvas) return null
+          if (video.videoWidth === 0 || video.videoHeight === 0) return null
+          downscaleCanvas.width = size.width
+          downscaleCanvas.height = size.height
+          const ctx = downscaleCanvas.getContext('2d')
+          if (!ctx) return null
+          ctx.drawImage(video, 0, 0, size.width, size.height)
+          return ctx.getImageData(0, 0, size.width, size.height)
+        },
         captureFrame: async (options = {}) => {
           const video = videoRef.current
           const canvas = canvasRef.current
