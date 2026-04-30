@@ -90,8 +90,11 @@ export interface SessionState {
   frames: FrameRecord[]
   currentSvg: string
   metrics: SessionMetrics
-  // 撮影開始時に確定する世界座標系への回転行列 (camera → world)
+  // 撮影開始時に確定する世界座標系への回転行列 (camera → world)。
+  // 各フレームの姿勢計算 (issue #23) では基準として参照される。
   worldOrientation?: RotationMatrix3
+  // 撮影開始時の DeviceOrientation alpha (yaw 差分計算用、issue #23)
+  baseAlphaDeg?: number
   // 疑似スケールパラメータ
   scaleHint?: ScaleHint
   // 累積点群 (世界座標、voxel ダウンサンプル済み)
