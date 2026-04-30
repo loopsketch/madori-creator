@@ -173,7 +173,3 @@ Content-Type: multipart/form-data
 - 撮影画像はセッション内 (`/tmp/madori/<sessionId>/`) に一時保存し、セッション終了時に破棄
 - セッション ID は UUID v4 で推測困難
 - カメラ・モーション利用は iOS のユーザー許可フローに従う
-
----
-
-最終更新: 2026-04-29
