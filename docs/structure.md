@@ -28,6 +28,7 @@ madori-creator/
 | [development.md](development.md) | 開発環境の起動・停止、環境変数、テスト、トラブルシュート |
 | [structure.md](structure.md) | (本ファイル) フォルダ構成 |
 | [issue-6-followups.md](issue-6-followups.md) | issue #6 系列の残課題 (実機検証・将来 Phase へ持ち越した項目) |
+| [mlserver.md](mlserver.md) | MASt3R-SLAM 推論サーバ (issue #30) のビルド・起動手順 |
 
 ## docker/
 
@@ -35,8 +36,9 @@ madori-creator/
 
 ```
 docker/
-├── backend/Dockerfile     node:20-slim ベース (onnxruntime-node が glibc を要求するため)
+├── backend/Dockerfile     nvidia/cuda:12.4.1-cudnn-runtime ベース (onnxruntime-node + CUDA EP)
 ├── front/Dockerfile       node:20-alpine ベース
+├── mlserver/Dockerfile    nvidia/cuda:12.4.1-cudnn-devel + Python 3.11 + MASt3R-SLAM (issue #30)
 └── nginx/
     ├── nginx.conf         /api → backend:3000、/__vite_ws → frontend:3000、/ → frontend:3000
     ├── generate-certs.sh  自己署名証明書生成スクリプト

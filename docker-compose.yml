@@ -89,8 +89,44 @@ services:
     ports:
       - "6379:6379"
 
+  # MASt3R-SLAM 推論サーバ (issue #30)
+  # Phase 1 (環境構築 + TUM-RGBD 動作確認) は sleep infinity で起動し、
+  # `docker compose exec mlserver bash` から手動で checkpoints DL と main.py を実行する。
+  # Phase 2 で FastAPI 化したら command を uvicorn 起動に差し替え、port 5001 を backend から呼ぶ。
+  mlserver:
+    build:
+      context: ./docker/mlserver
+      dockerfile: Dockerfile
+    container_name: madori-mlserver
+    environment:
+      - TZ=Asia/Tokyo
+      - PYTHONUNBUFFERED=1
+      # MASt3R-SLAM 既定。OpenGL を要求する viewer は Docker 内では使わない。
+      - HEADLESS=1
+    volumes:
+      # checkpoints (~2GB) と datasets はイメージに焼かず volume に永続化
+      - mlserver_checkpoints:/opt/mast3r-slam/checkpoints
+      - mlserver_datasets:/opt/mast3r-slam/datasets
+    ports:
+      - "5001:5001"
+    # GPU 割り当て (backend と同じ要領)。
+    # 前提: ホストに NVIDIA ドライバ + NVIDIA Container Toolkit。
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Phase 1 の暫定。Phase 2 で uvicorn 起動に切替。
+    # 起動後の動作確認手順は docs/mlserver.md を参照。
+    profiles:
+      - mlserver
+
 volumes:
   mysql_data:
   frontend_node_modules:
   backend_node_modules:
   backend_models:
+  mlserver_checkpoints:
+  mlserver_datasets:
