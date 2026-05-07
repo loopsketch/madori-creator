@@ -4,11 +4,11 @@
       "Bash(gh *)",
       "Bash(git *)",
       "Bash(docker compose *)",
-      "Bash(docker restart *)",
       "Bash(openssl genrsa *)",
       "Bash(openssl req *)",
       "WebSearch",
       "WebFetch(domain:github.com)",
+      "Bash(nvidia-smi -L)"
     ],
     "additionalDirectories": [
       "/home/user/.claude"
