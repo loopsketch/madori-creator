@@ -23,6 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # - python3.11 (MASt3R-SLAM 推奨)
 # - build-essential / cmake / git: thirdparty (curope, lietorch 等) のビルド用
 # - libgl1 / libglib2.0-0 / libsm6 / libxext6 / libxrender1: OpenCV / moderngl ランタイム
+# - libusb-1.0-0: pyrealsense2 のランタイム依存
 # - wget / ca-certificates: checkpoints DL 用
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -31,6 +32,7 @@ RUN apt-get update \
         python3.11 python3.11-dev python3.11-venv \
         python3-pip \
         libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+        libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # python -> python3.11 を既定に

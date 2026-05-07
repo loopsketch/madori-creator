@@ -98,6 +98,9 @@ services:
       context: ./docker/mlserver
       dockerfile: Dockerfile
     container_name: madori-mlserver
+    # MASt3R-SLAM の multiprocessing が PyTorch shared memory IPC を多用するため、
+    # Docker デフォルトの 64MB だと dataloader 初期化付近で Bus error (SIGBUS) が発生する。
+    shm_size: '4gb'
     environment:
       - TZ=Asia/Tokyo
       - PYTHONUNBUFFERED=1

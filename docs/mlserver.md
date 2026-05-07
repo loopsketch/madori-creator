@@ -82,6 +82,34 @@ nvidia-smi -l 2
 - TUM-RGBD `freiburg1_room` を最後まで処理できる
 - VRAM 使用量と FPS を実測し issue #30 にレポート
 
+### Phase 1 動作確認時に必要だった追加対処
+
+最初の起動で 2 回連続でクラッシュしたため対処を入れた経緯を残しておく。
+
+1. **`/dev/shm` を 4GB に拡大**
+   - 症状: dataloader 初期化付近で `Bus error (core dumped)` (EXIT=135)、約 1 分 43 秒で死亡
+   - 原因: Docker デフォルトの `/dev/shm` (64MB) が PyTorch multiprocessing の shared memory IPC に不足。`config/calib.yaml` は `single_thread: false` なので並列で大きな共有メモリを要求する
+   - 対処: `docker-compose.yml` の `mlserver` サービスに `shm_size: '4gb'` を追加
+
+2. **`libusb-1.0-0` を apt で追加**
+   - 症状: `import pyrealsense2` で `libusb-1.0.so.0: cannot open shared object file` (EXIT=1)、3 秒で死亡
+   - 原因: MASt3R-SLAM の `mast3r_slam/dataloader.py` がトップレベルで `pyrealsense2` を import しており、データセットが TUM でも実 RealSense 機器が無くても dlopen が走る。`pyrealsense2` の wheel は libusb-1.0 に動的依存
+   - 対処: Dockerfile の apt-get install 行に `libusb-1.0-0` を追加
+
+### Phase 1 計測結果 (2026-05-07)
+
+開発機: WSL2 + RTX 3050 Laptop 6GB + CUDA 12.8 host。
+
+- **動くは動く** が、VRAM が上限ギリギリで実用速度に到達せず
+  - peak VRAM: **5976 MiB / 6144 MiB (97%)**
+  - FPS: **0.024** (ログの `FPS: 0.0239...` 行、約 42 秒/frame)
+  - `freiburg1_room` (1362 frames, `subsample: 2` で 681 frames) の完走見込み: 約 8 時間 → 完走前に中断
+- 仮説: VRAM 上限張り付きで CUDA cache thrashing が発生しているか、論文値 (RTX 4090 で 〜15 fps) との計算性能差がそのまま出ている
+- 結論: **6GB クラス GPU では PoC 用途であっても実用不可**。Phase 2 (FastAPI ラップ) に進む前に、以下のどれを採るか #30 で要判断
+  - (a) ViSTA-SLAM など軽量代替への切替
+  - (b) `dataset.subsample` / `dataset.img_downsample` を上げて軽量化した上で再計測
+  - (c) ターゲット GPU を 8GB+ クラスに引き上げる前提に変更
+
 ## ライセンス上の注意
 
 MASt3R checkpoints は学習データセット由来で **non-commercial 相当**。本リポジトリでは PoC 検証目的で利用する。商用化フェーズでは ARKit ネイティブ化または自前訓練済みモデルへの切替が必要 (issue #30 参照)。
